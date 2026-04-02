@@ -1,5 +1,4 @@
 'use client'
-// Past Lists — 画像プレビュー付きで視覚的にわかるUI
 import { useState, useEffect, useCallback } from 'react'
 import { LayoutList, ShoppingCart, Trash2 } from 'lucide-react'
 import { supabase } from '@/lib/supabase/client'
@@ -26,7 +25,6 @@ export function TemplatesScreen({ onUseTemplate }: Props) {
   const [masterMap, setMasterMap] = useState<Map<string, MasterItem>>(new Map())
   const [loading, setLoading] = useState<string | null>(null)
 
-  // マスターアイテム読み込み（画像取得用）
   const loadMasterItems = useCallback(async () => {
     const { data } = await supabase.from('sl_master_items').select('*')
     if (data) {
@@ -36,7 +34,6 @@ export function TemplatesScreen({ onUseTemplate }: Props) {
     }
   }, [])
 
-  // テンプレート読み込み（アイテム含む）
   const loadTemplates = useCallback(async () => {
     const { data: lists } = await supabase
       .from('sl_shopping_lists')
@@ -116,30 +113,27 @@ export function TemplatesScreen({ onUseTemplate }: Props) {
 
   return (
     <div className="flex-1 flex flex-col overflow-hidden">
-      {/* ヘッダー */}
       <div className="px-4 pt-5 pb-3 shrink-0">
-        <h1 className="text-lg font-bold text-rose-800">💾 過去のリスト</h1>
+        <h1 className="text-lg font-bold text-rose-800">💾 Past Lists</h1>
       </div>
 
-      {/* リスト */}
       <div className="flex-1 overflow-y-auto px-4 pb-24 space-y-3">
         {templates.length === 0 && (
           <EmptyState
             icon={<LayoutList size={40} />}
-            title="まだ保存されたリストがないよ"
-            subtitle={'今日のリストで「保存」ボタンを押すと、ここに表示されます'}
+            title="No saved lists yet"
+            subtitle={'Save your Today\'s List to reuse it later!'}
           />
         )}
 
         {templates.map((tmpl) => (
           <div key={tmpl.id}
             className="bg-white rounded-2xl border border-rose-100 p-3 space-y-2">
-            {/* 日付 & 削除 */}
             <div className="flex items-center justify-between">
               <div className="flex items-center gap-2">
-                <span className="text-xs text-rose-400">{tmpl.name}</span>
+                <span className="text-xs font-semibold text-rose-700">{tmpl.name}</span>
                 <span className="text-[10px] text-rose-300">
-                  {tmpl.items.length}品 · ¥{tmpl.totalPrice.toLocaleString()}
+                  {tmpl.items.length} items · ¥{tmpl.totalPrice.toLocaleString()}
                 </span>
               </div>
               <button
@@ -151,7 +145,7 @@ export function TemplatesScreen({ onUseTemplate }: Props) {
               </button>
             </div>
 
-            {/* アイテム画像プレビューグリッド — 視覚的に中身がわかる！ */}
+            {/* Item preview grid */}
             <div className="flex flex-wrap gap-1.5">
               {tmpl.items.slice(0, 12).map((item) => {
                 const mi = item.master_item_id ? masterMap.get(item.master_item_id) : undefined
@@ -176,14 +170,13 @@ export function TemplatesScreen({ onUseTemplate }: Props) {
               )}
             </div>
 
-            {/* このリストを使うボタン */}
             <button
               onClick={() => useTemplate(tmpl)}
               disabled={loading === tmpl.id}
-              className="w-full flex items-center justify-center gap-1.5 bg-rose-400 hover:bg-rose-500 disabled:opacity-50 text-white font-semibold rounded-xl py-2 text-sm transition-colors"
+              className="w-full flex items-center justify-center gap-1.5 bg-gradient-to-r from-rose-400 to-pink-500 hover:from-rose-500 hover:to-pink-600 disabled:opacity-50 text-white font-semibold rounded-xl py-2.5 text-sm transition-all shadow-md shadow-rose-200/50 active:scale-[0.98]"
             >
               <ShoppingCart size={15} />
-              {loading === tmpl.id ? '読み込み中...' : 'このリストを使う'}
+              {loading === tmpl.id ? 'Loading...' : 'Use This List'}
             </button>
           </div>
         ))}

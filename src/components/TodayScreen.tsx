@@ -1,5 +1,4 @@
 'use client'
-// Today's shopping list — 画像中心のカートUI
 import { useState, useEffect, useCallback, useRef, useMemo } from 'react'
 import { Plus, Save, X } from 'lucide-react'
 import { AnimatePresence } from 'framer-motion'
@@ -24,7 +23,6 @@ export function TodayScreen({ masterItems }: Props) {
   const [saving, setSaving] = useState(false)
   const celebratedRef = useRef(false)
 
-  // master_item_id → MasterItem のルックアップマップ
   const masterMap = useMemo(() => {
     const m = new Map<string, MasterItem>()
     for (const mi of masterItems) m.set(mi.id, mi)
@@ -93,6 +91,7 @@ export function TodayScreen({ masterItems }: Props) {
     } finally { setSaving(false) }
   }
 
+  // Celebration when all done
   useEffect(() => {
     const allDone = items.length > 0 && items.every(i => i.is_checked)
     const noneAnimating = animatingIds.size === 0
@@ -119,22 +118,17 @@ export function TodayScreen({ masterItems }: Props) {
   const leaving = items.filter(i => animatingIds.has(i.id))
   const remaining = unchecked.length + leaving.length
 
-  const counterText = items.length === 0 ? null
-    : remaining === 0 ? '🎉 All done!'
-    : remaining === 1 ? '🔥 Last one!'
-    : remaining <= 3 ? `✨ あと${remaining}つ！`
-    : `🛒 あと${remaining}つ`
-
+  // No list yet — Start Shopping screen
   if (!list) {
     return (
       <div className="flex-1 flex flex-col items-center justify-center px-6">
         <div className="text-center space-y-4">
           <p className="text-6xl">🛒</p>
-          <p className="text-rose-800 font-bold text-xl">今日のお買い物</p>
-          <p className="text-rose-400 text-sm">まだリストがありません</p>
+          <p className="text-rose-800 font-bold text-xl">Today&apos;s Shopping</p>
+          <p className="text-rose-400 text-sm">No list created for today yet</p>
           <button onClick={createTodayList}
-            className="bg-rose-400 hover:bg-rose-500 text-white font-semibold rounded-2xl px-8 py-3 transition-colors">
-            お買い物を始める
+            className="bg-gradient-to-r from-rose-400 to-pink-500 hover:from-rose-500 hover:to-pink-600 text-white font-semibold rounded-2xl px-8 py-3 transition-all shadow-lg shadow-rose-200/50 active:scale-95">
+            Start Shopping
           </button>
         </div>
       </div>
@@ -143,30 +137,35 @@ export function TodayScreen({ masterItems }: Props) {
 
   return (
     <div className="flex-1 flex flex-col overflow-hidden">
-      {/* ヘッダー */}
+      {/* Header */}
       <div className="px-4 pt-4 pb-1 flex items-center justify-between shrink-0">
-        <h1 className="text-lg font-bold text-rose-800">🛒 今日のリスト</h1>
+        <h1 className="text-lg font-bold text-rose-800">🛒 Today&apos;s List</h1>
         <button onClick={() => setShowSaveSheet(true)} disabled={items.length === 0}
           className="flex items-center gap-1 text-xs text-rose-400 hover:text-rose-600 disabled:opacity-40 transition-colors">
-          <Save size={14} /> 保存
+          <Save size={14} /> Save
         </button>
       </div>
 
-      {/* 残りカウンター */}
-      {counterText && (
+      {/* Remaining counter */}
+      {items.length > 0 && (
         <div className="px-4 pb-1 shrink-0">
-          <p key={remaining} className={`text-sm font-bold animate-pulse-scale
-            ${remaining === 0 ? 'text-rose-400' : remaining === 1 ? 'text-orange-500' : 'text-rose-500'}`}>
-            {counterText}
+          <p className={`text-sm font-bold
+            ${remaining === 0 ? 'text-emerald-500' : remaining === 1 ? 'text-orange-500' : remaining <= 3 ? 'text-rose-500' : 'text-rose-400'}`}>
+            {remaining === 0 ? '🎉 All done!' : remaining === 1 ? '🔥 Last one!' : remaining <= 3 ? `✨ ${remaining} left!` : `${remaining} items left`}
           </p>
         </div>
       )}
 
-      {/* アイテムリスト */}
+      {/* Item list */}
       <div className="flex-1 overflow-y-auto px-3 space-y-1.5 pb-4">
         {items.length === 0 && (
-          <EmptyState icon={<Plus size={40} />} title="アイテムを追加"
-            subtitle="＋ボタンで My Items から選ぼう" />
+          <div className="flex flex-col items-center justify-center py-20 gap-4 text-center px-8">
+            <div className="w-20 h-20 bg-gradient-to-br from-rose-100 to-pink-100 rounded-3xl flex items-center justify-center">
+              <Plus size={32} className="text-rose-400" />
+            </div>
+            <p className="text-rose-800 font-semibold text-lg">Add items</p>
+            <p className="text-rose-400 text-sm">Tap the + button below to pick from My Items</p>
+          </div>
         )}
 
         <AnimatePresence mode="popLayout">
@@ -182,11 +181,11 @@ export function TodayScreen({ masterItems }: Props) {
           ))}
         </AnimatePresence>
 
-        {/* カート内（チェック済み）— 画像グリッド表示 */}
+        {/* In Cart (checked) — compact grid */}
         {inCart.length > 0 && (
           <div className="mt-3">
             <p className="text-[11px] font-semibold text-rose-300 uppercase tracking-wide mb-2">
-              ✅ カートに入れた ({inCart.length})
+              ✅ In Cart ({inCart.length})
             </p>
             <div className="grid grid-cols-6 gap-1.5 mb-2">
               {inCart.map(item => {
@@ -210,30 +209,31 @@ export function TodayScreen({ masterItems }: Props) {
         )}
       </div>
 
-      {/* Total bar + FAB */}
+      {/* Bottom: Total bar + modern FAB */}
       <div className="px-3 pb-2 shrink-0 relative">
+        {/* FAB — large, gradient, modern */}
         <button onClick={() => setPickerOpen(true)}
-          className="absolute -top-14 right-1 w-12 h-12 bg-rose-400 hover:bg-rose-500 text-white rounded-full shadow-lg flex items-center justify-center transition-all active:scale-90 z-10"
+          className="absolute -top-16 right-2 w-14 h-14 bg-gradient-to-br from-rose-400 to-pink-500 hover:from-rose-500 hover:to-pink-600 text-white rounded-2xl shadow-xl shadow-rose-300/40 flex items-center justify-center transition-all active:scale-90 z-10"
           aria-label="Add items">
-          <Plus size={22} />
+          <Plus size={28} strokeWidth={2.5} />
         </button>
         <TotalBar items={items} />
       </div>
 
-      {/* 削除確認 */}
+      {/* Delete confirmation */}
       {pendingDeleteId && (
         <div className="fixed inset-0 z-50 flex items-center justify-center px-8">
           <div className="absolute inset-0 bg-black/30" onClick={() => setPendingDeleteId(null)} />
           <div className="relative bg-white rounded-3xl p-6 w-full max-w-[300px] text-center space-y-3 shadow-xl">
             <p className="text-2xl">🗑️</p>
-            <p className="font-bold text-rose-800">削除する？</p>
+            <p className="font-bold text-rose-800">Delete this item?</p>
             <div className="flex gap-3">
               <button onClick={() => setPendingDeleteId(null)}
                 className="flex-1 border border-rose-200 text-rose-400 rounded-2xl py-2 text-sm font-medium hover:bg-rose-50 transition-colors">
                 Cancel
               </button>
               <button onClick={confirmDelete}
-                className="flex-1 bg-rose-400 hover:bg-rose-500 text-white rounded-2xl py-2 text-sm font-semibold transition-colors">
+                className="flex-1 bg-gradient-to-r from-rose-400 to-pink-500 text-white rounded-2xl py-2 text-sm font-semibold transition-colors">
                 Delete
               </button>
             </div>
@@ -241,23 +241,23 @@ export function TodayScreen({ masterItems }: Props) {
         </div>
       )}
 
-      {/* 保存シート */}
+      {/* Save as past list sheet */}
       {showSaveSheet && (
         <div className="fixed inset-0 z-50 flex items-end">
           <div className="absolute inset-0 bg-black/30" onClick={() => setShowSaveSheet(false)} />
           <div className="relative w-full max-w-[430px] mx-auto bg-white rounded-t-3xl p-6 pb-24 space-y-3">
             <div className="flex items-center justify-between">
-              <p className="font-bold text-rose-800">リストを保存？</p>
+              <p className="font-bold text-rose-800">Save to Past Lists?</p>
               <button onClick={() => setShowSaveSheet(false)} className="text-rose-300 hover:text-rose-500">
                 <X size={20} />
               </button>
             </div>
             <p className="text-sm text-rose-400">
-              Past Lists に保存して、次回再利用できます。
+              Save this list so you can reuse it next time.
             </p>
             <button onClick={saveAsPastList} disabled={saving}
-              className="w-full bg-rose-400 hover:bg-rose-500 disabled:opacity-50 text-white font-semibold rounded-2xl py-3 transition-colors">
-              {saving ? '保存中...' : '保存する ✨'}
+              className="w-full bg-gradient-to-r from-rose-400 to-pink-500 disabled:opacity-50 text-white font-semibold rounded-2xl py-3 transition-colors shadow-lg shadow-rose-200/50">
+              {saving ? 'Saving...' : 'Save ✨'}
             </button>
           </div>
         </div>

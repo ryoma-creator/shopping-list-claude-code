@@ -1,5 +1,4 @@
 'use client'
-// Add / Edit item modal（カテゴリグリッド・Price修正・Qty ステッパー・写真対応）
 import { useState, useEffect, useRef } from 'react'
 import { X, Camera, Minus, Plus } from 'lucide-react'
 import { supabase } from '@/lib/supabase/client'
@@ -33,9 +32,9 @@ export function MasterItemModal({ item, isOpen, onClose, onSave }: Props) {
   const [imageUrl, setImageUrl] = useState<string | null>(null)
   const [uploading, setUploading] = useState(false)
   const [loading, setLoading] = useState(false)
+  const [error, setError] = useState<string | null>(null)
   const fileInputRef = useRef<HTMLInputElement>(null)
 
-  // フォーム初期化
   useEffect(() => {
     if (item) {
       setName(item.name)
@@ -50,12 +49,11 @@ export function MasterItemModal({ item, isOpen, onClose, onSave }: Props) {
       setQty(1)
       setImageUrl(null)
     }
+    setError(null)
   }, [item, isOpen])
 
-  // Price を数値に変換（空文字は 0）
   const priceNum = priceStr === '' ? 0 : Number(priceStr)
 
-  // 写真アップロード
   const handleImageUpload = async (e: React.ChangeEvent<HTMLInputElement>) => {
     const file = e.target.files?.[0]
     if (!file) return
@@ -66,12 +64,12 @@ export function MasterItemModal({ item, isOpen, onClose, onSave }: Props) {
       const fileName = `${Date.now()}-${Math.random().toString(36).slice(2)}.${ext}`
       const filePath = `items/${fileName}`
 
-      const { error } = await supabase.storage
+      const { error: uploadError } = await supabase.storage
         .from('item-images')
         .upload(filePath, file, { cacheControl: '3600', upsert: false })
 
-      if (error) {
-        console.error('Upload error:', error)
+      if (uploadError) {
+        console.error('Upload error:', uploadError)
         return
       }
 
@@ -88,16 +86,25 @@ export function MasterItemModal({ item, isOpen, onClose, onSave }: Props) {
   const handleSave = async () => {
     if (!name.trim()) return
     setLoading(true)
+    setError(null)
     try {
       if (item) {
-        await supabase
+        const { error: updateError } = await supabase
           .from('sl_master_items')
-          .update({ name, category, default_price: priceNum, default_qty: qty, image_url: imageUrl })
+          .update({ name: name.trim(), category, default_price: priceNum, default_qty: qty, image_url: imageUrl })
           .eq('id', item.id)
+        if (updateError) {
+          setError(`Save failed: ${updateError.message}`)
+          return
+        }
       } else {
-        await supabase
+        const { error: insertError } = await supabase
           .from('sl_master_items')
-          .insert({ name, category, default_price: priceNum, default_qty: qty, image_url: imageUrl })
+          .insert({ name: name.trim(), category, default_price: priceNum, default_qty: qty, image_url: imageUrl })
+        if (insertError) {
+          setError(`Save failed: ${insertError.message}`)
+          return
+        }
       }
       onSave()
       onClose()
@@ -110,21 +117,25 @@ export function MasterItemModal({ item, isOpen, onClose, onSave }: Props) {
 
   return (
     <div className="fixed inset-0 z-50 flex items-end">
-      {/* Overlay */}
       <div className="absolute inset-0 bg-black/30" onClick={onClose} />
-      {/* Modal — pb-20 でナビバーに隠れないようにする */}
       <div className="relative w-full max-w-[430px] mx-auto bg-white rounded-t-3xl p-5 pb-24 space-y-4 max-h-[90vh] overflow-y-auto">
-        {/* Header */}
         <div className="flex items-center justify-between">
           <h2 className="text-lg font-bold text-rose-800">
-            {item ? 'Edit Item' : 'Add Item'}
+            {item ? 'Edit Item' : 'Add New Item'}
           </h2>
           <button onClick={onClose} className="text-rose-300 hover:text-rose-500">
             <X size={20} />
           </button>
         </div>
 
-        {/* 写真アップロード + プレビュー */}
+        {/* Error message */}
+        {error && (
+          <div className="bg-red-50 border border-red-200 text-red-600 text-sm rounded-xl px-4 py-2">
+            {error}
+          </div>
+        )}
+
+        {/* Photo upload */}
         <div className="flex items-center gap-3">
           <button
             onClick={() => fileInputRef.current?.click()}
@@ -156,91 +167,74 @@ export function MasterItemModal({ item, isOpen, onClose, onSave }: Props) {
           </p>
         </div>
 
-        {/* Item name */}
-        <div>
-          <label className="text-xs text-rose-400 mb-1 block">Item name</label>
-          <input
-            type="text"
-            placeholder="e.g. Milk"
-            value={name}
-            onChange={(e) => setName(e.target.value)}
-            className="w-full border border-rose-200 rounded-xl px-4 py-2.5 text-sm text-rose-900 placeholder-rose-300 focus:outline-none focus:ring-2 focus:ring-rose-300"
-          />
-        </div>
-
-        {/* カテゴリ — 絵文字グリッドボタン */}
-        <div>
-          <label className="text-xs text-rose-400 mb-2 block">Category</label>
-          <div className="grid grid-cols-5 gap-2">
-            {CATEGORIES.map((c) => (
-              <button
-                key={c.value}
-                type="button"
-                onClick={() => setCategory(c.value)}
-                className={`flex flex-col items-center gap-0.5 py-2 rounded-xl transition-all active:scale-95
-                  ${category === c.value
-                    ? 'bg-rose-400 text-white shadow-md ring-2 ring-rose-300'
-                    : 'bg-rose-50 text-rose-600 hover:bg-rose-100'
-                  }`}
-              >
-                <span className="text-xl leading-none">{c.emoji}</span>
-                <span className="text-[10px] font-medium leading-tight">{c.label}</span>
-              </button>
-            ))}
-          </div>
-        </div>
-
-        {/* Price & Quantity */}
-        <div className="flex gap-3">
-          {/* Price — テキスト入力（0問題を解消） */}
-          <div className="flex-1">
-            <label className="text-xs text-rose-400 mb-1 block">Price (¥)</label>
+        <div className="space-y-3">
+          <div>
+            <label className="text-xs text-rose-400 mb-1 block">Item name</label>
             <input
               type="text"
-              inputMode="numeric"
-              placeholder="0"
-              value={priceStr}
-              onChange={(e) => {
-                // 数字のみ許可
-                const v = e.target.value.replace(/[^0-9]/g, '')
-                setPriceStr(v)
-              }}
+              placeholder="e.g. Milk"
+              value={name}
+              onChange={(e) => setName(e.target.value)}
               className="w-full border border-rose-200 rounded-xl px-4 py-2.5 text-sm text-rose-900 placeholder-rose-300 focus:outline-none focus:ring-2 focus:ring-rose-300"
             />
           </div>
 
-          {/* Quantity — +/- ステッパー */}
-          <div className="flex-1">
-            <label className="text-xs text-rose-400 mb-1 block">Quantity</label>
-            <div className="flex items-center border border-rose-200 rounded-xl overflow-hidden">
-              <button
-                type="button"
-                onClick={() => setQty(q => Math.max(1, q - 1))}
-                className="w-10 h-[42px] flex items-center justify-center text-rose-400 hover:bg-rose-50 active:bg-rose-100 transition-colors"
-              >
-                <Minus size={16} />
-              </button>
-              <span className="flex-1 text-center text-sm font-semibold text-rose-900">
-                {qty}
-              </span>
-              <button
-                type="button"
-                onClick={() => setQty(q => q + 1)}
-                className="w-10 h-[42px] flex items-center justify-center text-rose-400 hover:bg-rose-50 active:bg-rose-100 transition-colors"
-              >
-                <Plus size={16} />
-              </button>
+          <div>
+            <label className="text-xs text-rose-400 mb-2 block">Category</label>
+            <div className="grid grid-cols-5 gap-2">
+              {CATEGORIES.map((c) => (
+                <button
+                  key={c.value}
+                  type="button"
+                  onClick={() => setCategory(c.value)}
+                  className={`flex flex-col items-center gap-0.5 py-2 rounded-xl transition-all active:scale-95
+                    ${category === c.value
+                      ? 'bg-rose-400 text-white shadow-md ring-2 ring-rose-300'
+                      : 'bg-rose-50 text-rose-600 hover:bg-rose-100'
+                    }`}
+                >
+                  <span className="text-xl leading-none">{c.emoji}</span>
+                  <span className="text-[10px] font-medium leading-tight">{c.label}</span>
+                </button>
+              ))}
+            </div>
+          </div>
+
+          <div className="flex gap-3">
+            <div className="flex-1">
+              <label className="text-xs text-rose-400 mb-1 block">Price (¥)</label>
+              <input
+                type="text"
+                inputMode="numeric"
+                placeholder="0"
+                value={priceStr}
+                onChange={(e) => setPriceStr(e.target.value.replace(/[^0-9]/g, ''))}
+                className="w-full border border-rose-200 rounded-xl px-4 py-2.5 text-sm text-rose-900 placeholder-rose-300 focus:outline-none focus:ring-2 focus:ring-rose-300"
+              />
+            </div>
+            <div className="flex-1">
+              <label className="text-xs text-rose-400 mb-1 block">Quantity</label>
+              <div className="flex items-center border border-rose-200 rounded-xl overflow-hidden">
+                <button type="button" onClick={() => setQty(q => Math.max(1, q - 1))}
+                  className="w-10 h-[42px] flex items-center justify-center text-rose-400 hover:bg-rose-50 active:bg-rose-100 transition-colors">
+                  <Minus size={16} />
+                </button>
+                <span className="flex-1 text-center text-sm font-semibold text-rose-900">{qty}</span>
+                <button type="button" onClick={() => setQty(q => q + 1)}
+                  className="w-10 h-[42px] flex items-center justify-center text-rose-400 hover:bg-rose-50 active:bg-rose-100 transition-colors">
+                  <Plus size={16} />
+                </button>
+              </div>
             </div>
           </div>
         </div>
 
-        {/* Save ボタン */}
         <button
           onClick={handleSave}
           disabled={loading || !name.trim()}
-          className="w-full bg-rose-400 hover:bg-rose-500 disabled:opacity-50 text-white font-semibold rounded-2xl py-3 transition-colors"
+          className="w-full bg-gradient-to-r from-rose-400 to-pink-500 hover:from-rose-500 hover:to-pink-600 disabled:opacity-50 text-white font-bold rounded-2xl py-3.5 transition-all shadow-lg shadow-rose-200/50 text-base"
         >
-          {loading ? 'Saving...' : 'Save ✨'}
+          {loading ? 'Saving...' : item ? 'Save Changes' : 'Add Item ✨'}
         </button>
       </div>
     </div>

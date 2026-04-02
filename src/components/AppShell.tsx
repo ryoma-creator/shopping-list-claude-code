@@ -1,5 +1,4 @@
 'use client'
-// アプリのルートコンポーネント（タブ管理）
 import { useState, useEffect, useCallback } from 'react'
 import { TabBar, type TabId } from '@/components/TabBar'
 import { TodayScreen } from '@/components/TodayScreen'
@@ -12,7 +11,6 @@ export function AppShell() {
   const [activeTab, setActiveTab] = useState<TabId>('today')
   const [masterItems, setMasterItems] = useState<MasterItem[]>([])
 
-  // マスターアイテムをアプリ起動時に読み込む
   const loadMasterItems = useCallback(async () => {
     const { data } = await supabase
       .from('sl_master_items')
@@ -22,29 +20,34 @@ export function AppShell() {
     if (data) setMasterItems(data)
   }, [])
 
+  // Load on mount
   useEffect(() => {
     loadMasterItems()
   }, [loadMasterItems])
 
-  // Service Worker を登録（PWA対応）
+  // Reload master items every time we switch TO today tab
+  // so newly added items in My Items are always available
+  useEffect(() => {
+    if (activeTab === 'today') {
+      loadMasterItems()
+    }
+  }, [activeTab, loadMasterItems])
+
+  // PWA
   useEffect(() => {
     if ('serviceWorker' in navigator) {
-      navigator.serviceWorker.register('/sw.js').catch(() => {
-        // Service Worker 登録失敗は無視
-      })
+      navigator.serviceWorker.register('/sw.js').catch(() => {})
     }
   }, [])
 
   return (
-    // Full height layout: content fills space above fixed TabBar
     <div className="flex flex-col bg-rose-50" style={{ height: '100dvh' }}>
-      {/* Heart decoration */}
+      {/* Decorative hearts */}
       <div className="fixed top-0 left-0 right-0 max-w-[430px] mx-auto pointer-events-none z-0">
         <div className="absolute top-4 right-6 text-rose-200 text-2xl">♥</div>
         <div className="absolute top-12 left-4 text-rose-100 text-lg">♥</div>
       </div>
 
-      {/* Main content — flex-1, sits above TabBar (pb-16) */}
       <main className="flex-1 flex flex-col relative overflow-hidden pb-16">
         {activeTab === 'today' && (
           <TodayScreen masterItems={masterItems} />
@@ -57,7 +60,6 @@ export function AppShell() {
         )}
       </main>
 
-      {/* Bottom tab bar */}
       <TabBar activeTab={activeTab} onTabChange={setActiveTab} />
     </div>
   )
