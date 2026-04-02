@@ -14,6 +14,9 @@ export function useAuth() {
       setUser(u)
       prevUserId.current = u?.id ?? null
       setLoading(false)
+    }).catch(() => {
+      // Offline — session might still be in localStorage via supabase-js
+      setLoading(false)
     })
 
     const { data: { subscription } } = supabase.auth.onAuthStateChange(

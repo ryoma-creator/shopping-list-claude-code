@@ -8,23 +8,29 @@ import { AuthScreen } from '@/components/AuthScreen'
 import { useAuth } from '@/hooks/useAuth'
 import { supabase } from '@/lib/supabase/client'
 import { offlineCache } from '@/lib/offlineCache'
-import { LogOut, ShoppingCart } from 'lucide-react'
+import { LogOut, ShoppingCart, WifiOff } from 'lucide-react'
 import type { MasterItem } from '@/types/database'
 
 export function AppShell() {
   const { user, loading: authLoading, displayName, signIn, signUp, signOut } = useAuth()
   const [activeTab, setActiveTab] = useState<TabId>('today')
+  const [isOffline, setIsOffline] = useState(false)
   const [masterItems, setMasterItems] = useState<MasterItem[]>(() => {
     // Start with cached data for instant offline display
     return offlineCache.loadMasterItems<MasterItem[]>() ?? []
   })
 
   const loadMasterItems = useCallback(async () => {
-    const { data } = await supabase
+    const { data, error } = await supabase
       .from('sl_master_items')
       .select('*')
       .order('category')
       .order('name')
+    if (error) {
+      // Network error → keep cached master items
+      console.error('loadMasterItems error (offline?):', error.message)
+      return
+    }
     if (data) {
       setMasterItems(data)
       offlineCache.saveMasterItems(data)
@@ -40,6 +46,23 @@ export function AppShell() {
       loadMasterItems()
     }
   }, [user, activeTab, loadMasterItems])
+
+  // Offline detection
+  useEffect(() => {
+    const goOffline = () => setIsOffline(true)
+    const goOnline = () => {
+      setIsOffline(false)
+      // Re-sync data when back online
+      if (user) loadMasterItems()
+    }
+    setIsOffline(!navigator.onLine)
+    window.addEventListener('offline', goOffline)
+    window.addEventListener('online', goOnline)
+    return () => {
+      window.removeEventListener('offline', goOffline)
+      window.removeEventListener('online', goOnline)
+    }
+  }, [user, loadMasterItems])
 
   // PWA
   useEffect(() => {
@@ -66,6 +89,13 @@ export function AppShell() {
 
   return (
     <div className="flex flex-col bg-rose-50" style={{ height: '100dvh' }}>
+      {/* Offline banner */}
+      {isOffline && (
+        <div className="bg-amber-500 text-white text-xs font-semibold text-center py-1.5 px-4 flex items-center justify-center gap-1.5 shrink-0">
+          <WifiOff size={12} />
+          Offline — showing saved data
+        </div>
+      )}
       {/* Header */}
       <div className="flex items-center justify-between px-4 pt-3 pb-1 shrink-0 z-10">
         <div className="flex items-center gap-2">

@@ -1,10 +1,13 @@
-const CACHE_NAME = 'shopping-list-v2'
+const CACHE_NAME = 'shopping-list-v3'
 
 // Cache app shell on install
 self.addEventListener('install', (event) => {
   event.waitUntil(
     caches.open(CACHE_NAME).then((cache) =>
-      cache.addAll(['/'])
+      cache.addAll([
+        '/',
+        '/manifest.webmanifest',
+      ])
     )
   )
   self.skipWaiting()
@@ -28,29 +31,33 @@ self.addEventListener('fetch', (event) => {
   if (event.request.method !== 'GET') return
   if (url.hostname.includes('supabase')) return
 
-  // For navigation and static assets: Network first, fallback to cache
+  // For navigation requests: Network first, fallback to cached index
+  if (event.request.mode === 'navigate') {
+    event.respondWith(
+      fetch(event.request)
+        .then((response) => {
+          if (response.ok) {
+            const clone = response.clone()
+            caches.open(CACHE_NAME).then((cache) => cache.put(event.request, clone))
+          }
+          return response
+        })
+        .catch(() => caches.match('/').then((cached) => cached || new Response('Offline', { status: 503 })))
+    )
+    return
+  }
+
+  // For JS/CSS/images: Cache first → network fallback → cache the response
   event.respondWith(
-    fetch(event.request)
-      .then((response) => {
-        // Cache successful responses for offline use
-        if (response.ok) {
+    caches.match(event.request).then((cached) => {
+      if (cached) return cached
+      return fetch(event.request).then((response) => {
+        if (response.ok && (url.pathname.startsWith('/_next/') || url.pathname.match(/\.(js|css|png|jpg|svg|ico|woff2?)$/))) {
           const clone = response.clone()
-          caches.open(CACHE_NAME).then((cache) => {
-            cache.put(event.request, clone)
-          })
+          caches.open(CACHE_NAME).then((cache) => cache.put(event.request, clone))
         }
         return response
-      })
-      .catch(() => {
-        // Network failed → serve from cache (offline mode)
-        return caches.match(event.request).then((cached) => {
-          if (cached) return cached
-          // If navigating, return cached home page
-          if (event.request.mode === 'navigate') {
-            return caches.match('/')
-          }
-          return new Response('Offline', { status: 503 })
-        })
-      })
+      }).catch(() => new Response('', { status: 503 }))
+    })
   )
 })

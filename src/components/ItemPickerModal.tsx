@@ -46,6 +46,15 @@ export function ItemPickerModal({ listId, isOpen, onClose, masterItems, onAdded 
     setJustAdded(prev => new Set([...prev, item.id]))
     countRef.current += 1
     setAddedCount(countRef.current)
+
+    if (!navigator.onLine) {
+      alert('You need internet to add items. Please connect to WiFi.')
+      setJustAdded(prev => { const s = new Set(prev); s.delete(item.id); return s })
+      countRef.current -= 1
+      setAddedCount(countRef.current)
+      return
+    }
+
     const { error } = await supabase.from('sl_list_items').insert({
       list_id: listId, master_item_id: item.id, name: item.name,
       price: item.default_price, qty: item.default_qty,
@@ -53,7 +62,6 @@ export function ItemPickerModal({ listId, isOpen, onClose, masterItems, onAdded 
     })
     if (error) {
       console.error('Insert list item failed:', error.message)
-      // Undo the visual "added" state
       setJustAdded(prev => { const s = new Set(prev); s.delete(item.id); return s })
       countRef.current -= 1
       setAddedCount(countRef.current)

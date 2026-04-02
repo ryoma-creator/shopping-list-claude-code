@@ -38,12 +38,16 @@ export function TodayScreen({ masterItems }: Props) {
     const today = new Date().toLocaleDateString('en-CA')
     const { data, error } = await supabase.from('sl_shopping_lists').select('*')
       .eq('is_template', false).eq('name', today).limit(1)
-    if (error) console.error('loadTodayList error:', error.message)
+    if (error) {
+      // Network error → keep cached data, don't reset
+      console.error('loadTodayList error (offline?):', error.message)
+      return
+    }
+    // Only reset when API succeeds but returns empty (truly no list)
     if (data && data.length > 0) {
       setList(data[0])
       offlineCache.saveTodayList(data[0])
     } else {
-      // List not found (deleted or first time) → reset state
       setList(null)
       setItems([])
       offlineCache.saveTodayList(null)
@@ -54,7 +58,11 @@ export function TodayScreen({ masterItems }: Props) {
   const loadItems = useCallback(async (listId: string) => {
     const { data, error } = await supabase.from('sl_list_items').select('*')
       .eq('list_id', listId).order('sort_order')
-    if (error) console.error('loadItems error:', error.message)
+    if (error) {
+      // Network error → keep cached items
+      console.error('loadItems error (offline?):', error.message)
+      return
+    }
     if (data) {
       setItems(data)
       offlineCache.saveTodayItems(data)
@@ -62,6 +70,10 @@ export function TodayScreen({ masterItems }: Props) {
   }, [])
 
   const createTodayList = async () => {
+    if (!navigator.onLine) {
+      alert('You need internet to create a new list. Please connect to WiFi.')
+      return
+    }
     const today = new Date().toLocaleDateString('en-CA')
     const { data, error } = await supabase.from('sl_shopping_lists')
       .insert({ name: today, is_template: false }).select().single()
@@ -78,12 +90,22 @@ export function TodayScreen({ masterItems }: Props) {
       setAnimatingIds(prev => new Set([...prev, id]))
       setTimeout(() => {
         setAnimatingIds(prev => { const s = new Set(prev); s.delete(id); return s })
-        setItems(prev => prev.map(i => i.id === id ? { ...i, is_checked: true } : i))
+        setItems(prev => {
+          const next = prev.map(i => i.id === id ? { ...i, is_checked: true } : i)
+          offlineCache.saveTodayItems(next)
+          return next
+        })
         supabase.from('sl_list_items').update({ is_checked: true }).eq('id', id)
+          .then(({ error }) => error && console.warn('Toggle sync failed (offline?):', error.message))
       }, 500)
     } else {
-      setItems(prev => prev.map(i => i.id === id ? { ...i, is_checked: false } : i))
+      setItems(prev => {
+        const next = prev.map(i => i.id === id ? { ...i, is_checked: false } : i)
+        offlineCache.saveTodayItems(next)
+        return next
+      })
       supabase.from('sl_list_items').update({ is_checked: false }).eq('id', id)
+        .then(({ error }) => error && console.warn('Toggle sync failed (offline?):', error.message))
     }
   }
 
@@ -91,8 +113,13 @@ export function TodayScreen({ masterItems }: Props) {
     if (!pendingDeleteId) return
     const id = pendingDeleteId
     setPendingDeleteId(null)
-    setItems(prev => prev.filter(i => i.id !== id))
-    await supabase.from('sl_list_items').delete().eq('id', id)
+    setItems(prev => {
+      const next = prev.filter(i => i.id !== id)
+      offlineCache.saveTodayItems(next)
+      return next
+    })
+    const { error } = await supabase.from('sl_list_items').delete().eq('id', id)
+    if (error) console.warn('Delete sync failed (offline?):', error.message)
   }
 
   const saveAsPastList = async () => {

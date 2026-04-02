@@ -22,9 +22,10 @@ interface Props {
   isOpen: boolean
   onClose: () => void
   onSave: () => void
+  onDelete?: (id: string) => void
 }
 
-export function MasterItemModal({ item, isOpen, onClose, onSave }: Props) {
+export function MasterItemModal({ item, isOpen, onClose, onSave, onDelete }: Props) {
   const [name, setName] = useState('')
   const [category, setCategory] = useState<Category>('other')
   const [priceStr, setPriceStr] = useState('')
@@ -33,6 +34,7 @@ export function MasterItemModal({ item, isOpen, onClose, onSave }: Props) {
   const [uploading, setUploading] = useState(false)
   const [loading, setLoading] = useState(false)
   const [error, setError] = useState<string | null>(null)
+  const [showDeleteConfirm, setShowDeleteConfirm] = useState(false)
   const fileInputRef = useRef<HTMLInputElement>(null)
 
   useEffect(() => {
@@ -50,6 +52,7 @@ export function MasterItemModal({ item, isOpen, onClose, onSave }: Props) {
       setImageUrl(null)
     }
     setError(null)
+    setShowDeleteConfirm(false)
   }, [item, isOpen])
 
   const priceNum = priceStr === '' ? 0 : Number(priceStr)
@@ -240,6 +243,33 @@ export function MasterItemModal({ item, isOpen, onClose, onSave }: Props) {
         >
           {loading ? 'Saving...' : item ? 'Save Changes' : 'Add Item ✨'}
         </button>
+
+        {/* Delete button (edit mode only) */}
+        {item && onDelete && !showDeleteConfirm && (
+          <button
+            onClick={() => setShowDeleteConfirm(true)}
+            className="w-full text-rose-300 hover:text-rose-500 text-sm font-medium py-2 transition-colors"
+          >
+            Delete this item
+          </button>
+        )}
+
+        {/* Delete confirmation */}
+        {item && onDelete && showDeleteConfirm && (
+          <div className="bg-red-50 rounded-2xl p-4 space-y-3">
+            <p className="text-sm font-semibold text-red-600 text-center">Delete &ldquo;{item.name}&rdquo;?</p>
+            <div className="flex gap-3">
+              <button onClick={() => setShowDeleteConfirm(false)}
+                className="flex-1 border border-rose-200 text-rose-400 rounded-xl py-2 text-sm font-medium">
+                Cancel
+              </button>
+              <button onClick={() => { onDelete(item.id); onClose() }}
+                className="flex-1 bg-red-500 text-white rounded-xl py-2 text-sm font-semibold">
+                Delete
+              </button>
+            </div>
+          </div>
+        )}
       </div>
     </div>
   )
