@@ -88,23 +88,27 @@ export function MasterItemModal({ item, isOpen, onClose, onSave }: Props) {
     setLoading(true)
     setError(null)
     try {
+      // Base payload (always works even without image_url column)
+      const base = { name: name.trim(), category, default_price: priceNum, default_qty: qty }
+      // Only include image_url if user uploaded a photo
+      const payload = imageUrl ? { ...base, image_url: imageUrl } : base
+
       if (item) {
-        const { error: updateError } = await supabase
-          .from('sl_master_items')
-          .update({ name: name.trim(), category, default_price: priceNum, default_qty: qty, image_url: imageUrl })
-          .eq('id', item.id)
-        if (updateError) {
-          setError(`Save failed: ${updateError.message}`)
-          return
+        // Try with image_url first, fallback without it
+        let { error: err } = await supabase.from('sl_master_items').update(payload).eq('id', item.id)
+        if (err && imageUrl) {
+          // image_url column might not exist yet — retry without it
+          const result = await supabase.from('sl_master_items').update(base).eq('id', item.id)
+          err = result.error
         }
+        if (err) { setError(`Save failed: ${err.message}`); return }
       } else {
-        const { error: insertError } = await supabase
-          .from('sl_master_items')
-          .insert({ name: name.trim(), category, default_price: priceNum, default_qty: qty, image_url: imageUrl })
-        if (insertError) {
-          setError(`Save failed: ${insertError.message}`)
-          return
+        let { error: err } = await supabase.from('sl_master_items').insert(payload)
+        if (err && imageUrl) {
+          const result = await supabase.from('sl_master_items').insert(base)
+          err = result.error
         }
+        if (err) { setError(`Save failed: ${err.message}`); return }
       }
       onSave()
       onClose()
