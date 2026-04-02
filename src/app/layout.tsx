@@ -1,14 +1,13 @@
 import type { Metadata, Viewport } from 'next'
 import './globals.css'
 
-// PWAメタデータ
 export const metadata: Metadata = {
-  title: 'お買い物リスト',
-  description: '2人で共有できる可愛い買い物リスト',
+  title: 'Shopping List',
+  description: 'Your smart grocery companion',
   appleWebApp: {
     capable: true,
     statusBarStyle: 'default',
-    title: 'お買い物リスト',
+    title: 'Shopping List',
   },
 }
 
@@ -25,7 +24,7 @@ export default function RootLayout({
   children: React.ReactNode
 }) {
   return (
-    <html lang="ja">
+    <html lang="en">
       <body>{children}</body>
     </html>
   )
