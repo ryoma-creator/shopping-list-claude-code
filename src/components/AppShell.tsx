@@ -7,13 +7,17 @@ import { TemplatesScreen } from '@/components/TemplatesScreen'
 import { AuthScreen } from '@/components/AuthScreen'
 import { useAuth } from '@/hooks/useAuth'
 import { supabase } from '@/lib/supabase/client'
+import { offlineCache } from '@/lib/offlineCache'
 import { LogOut, ShoppingCart } from 'lucide-react'
 import type { MasterItem } from '@/types/database'
 
 export function AppShell() {
   const { user, loading: authLoading, displayName, signIn, signUp, signOut } = useAuth()
   const [activeTab, setActiveTab] = useState<TabId>('today')
-  const [masterItems, setMasterItems] = useState<MasterItem[]>([])
+  const [masterItems, setMasterItems] = useState<MasterItem[]>(() => {
+    // Start with cached data for instant offline display
+    return offlineCache.loadMasterItems<MasterItem[]>() ?? []
+  })
 
   const loadMasterItems = useCallback(async () => {
     const { data } = await supabase
@@ -21,7 +25,10 @@ export function AppShell() {
       .select('*')
       .order('category')
       .order('name')
-    if (data) setMasterItems(data)
+    if (data) {
+      setMasterItems(data)
+      offlineCache.saveMasterItems(data)
+    }
   }, [])
 
   useEffect(() => {

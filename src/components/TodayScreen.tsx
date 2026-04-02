@@ -3,6 +3,7 @@ import { useState, useEffect, useCallback, useRef, useMemo } from 'react'
 import { Plus, Save, X } from 'lucide-react'
 import { AnimatePresence } from 'framer-motion'
 import { supabase } from '@/lib/supabase/client'
+import { offlineCache } from '@/lib/offlineCache'
 import { ItemRow } from '@/components/ItemRow'
 import { TotalBar } from '@/components/TotalBar'
 import { EmptyState } from '@/components/EmptyState'
@@ -13,8 +14,12 @@ import type { ListItem, MasterItem, ShoppingList } from '@/types/database'
 interface Props { masterItems: MasterItem[] }
 
 export function TodayScreen({ masterItems }: Props) {
-  const [list, setList] = useState<ShoppingList | null>(null)
-  const [items, setItems] = useState<ListItem[]>([])
+  const [list, setList] = useState<ShoppingList | null>(() =>
+    offlineCache.loadTodayList<ShoppingList>()
+  )
+  const [items, setItems] = useState<ListItem[]>(() =>
+    offlineCache.loadTodayItems<ListItem[]>() ?? []
+  )
   const [animatingIds, setAnimatingIds] = useState<Set<string>>(new Set())
   const [pendingDeleteId, setPendingDeleteId] = useState<string | null>(null)
   const [pickerOpen, setPickerOpen] = useState(false)
@@ -33,13 +38,19 @@ export function TodayScreen({ masterItems }: Props) {
     const today = new Date().toLocaleDateString('en-CA')
     const { data } = await supabase.from('sl_shopping_lists').select('*')
       .eq('is_template', false).eq('name', today).limit(1)
-    if (data && data.length > 0) setList(data[0])
+    if (data && data.length > 0) {
+      setList(data[0])
+      offlineCache.saveTodayList(data[0])
+    }
   }, [])
 
   const loadItems = useCallback(async (listId: string) => {
     const { data } = await supabase.from('sl_list_items').select('*')
       .eq('list_id', listId).order('sort_order')
-    if (data) setItems(data)
+    if (data) {
+      setItems(data)
+      offlineCache.saveTodayItems(data)
+    }
   }, [])
 
   const createTodayList = async () => {
