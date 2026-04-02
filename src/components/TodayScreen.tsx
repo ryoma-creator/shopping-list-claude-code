@@ -159,13 +159,14 @@ export function TodayScreen({ masterItems }: Props) {
       {/* Item list */}
       <div className="flex-1 overflow-y-auto px-3 space-y-1.5 pb-4">
         {items.length === 0 && (
-          <div className="flex flex-col items-center justify-center py-20 gap-4 text-center px-8">
-            <div className="w-20 h-20 bg-gradient-to-br from-rose-100 to-pink-100 rounded-3xl flex items-center justify-center">
-              <Plus size={32} className="text-rose-400" />
+          <button onClick={() => setPickerOpen(true)}
+            className="flex flex-col items-center justify-center py-20 gap-4 text-center px-8 w-full hover:opacity-80 active:scale-95 transition-all cursor-pointer">
+            <div className="w-20 h-20 bg-gradient-to-br from-rose-400 to-pink-500 rounded-3xl flex items-center justify-center shadow-lg shadow-rose-200/50">
+              <Plus size={32} className="text-white" strokeWidth={2.5} />
             </div>
             <p className="text-rose-800 font-semibold text-lg">Add items</p>
-            <p className="text-rose-400 text-sm">Tap the + button below to pick from My Items</p>
-          </div>
+            <p className="text-rose-400 text-sm">Tap here to pick from My Items</p>
+          </button>
         )}
 
         <AnimatePresence mode="popLayout">

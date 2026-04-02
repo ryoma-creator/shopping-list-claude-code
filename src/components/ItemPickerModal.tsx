@@ -1,6 +1,6 @@
 'use client'
-import { useState } from 'react'
-import { X, Check } from 'lucide-react'
+import { useState, useRef } from 'react'
+import { X } from 'lucide-react'
 import { supabase } from '@/lib/supabase/client'
 import type { MasterItem } from '@/types/database'
 
@@ -34,7 +34,9 @@ interface Props {
 
 export function ItemPickerModal({ listId, isOpen, onClose, masterItems, onAdded }: Props) {
   const [activeCat, setActiveCat] = useState('all')
+  const [addedCount, setAddedCount] = useState(0)
   const [justAdded, setJustAdded] = useState<Set<string>>(new Set())
+  const countRef = useRef(0)
 
   const filtered = activeCat === 'all' ? masterItems
     : masterItems.filter(i => i.category === activeCat)
@@ -42,28 +44,43 @@ export function ItemPickerModal({ listId, isOpen, onClose, masterItems, onAdded 
   const addItem = async (item: MasterItem) => {
     if (justAdded.has(item.id)) return
     setJustAdded(prev => new Set([...prev, item.id]))
+    countRef.current += 1
+    setAddedCount(countRef.current)
     await supabase.from('sl_list_items').insert({
       list_id: listId, master_item_id: item.id, name: item.name,
       price: item.default_price, qty: item.default_qty,
       is_checked: false, sort_order: masterItems.length,
     })
     onAdded?.()
-    setTimeout(() => setJustAdded(prev => { const s = new Set(prev); s.delete(item.id); return s }), 1200)
+  }
+
+  const handleClose = () => {
+    // Reset counts when closing
+    countRef.current = 0
+    setAddedCount(0)
+    setJustAdded(new Set())
+    onClose()
   }
 
   if (!isOpen) return null
 
   return (
     <div className="fixed inset-0 z-50 flex flex-col">
-      <div className="absolute inset-0 bg-black/30" onClick={onClose} />
+      <div className="absolute inset-0 bg-black/30" onClick={handleClose} />
 
-      {/* Near-fullscreen modal */}
       <div className="relative flex-1 flex flex-col mt-8 mx-auto w-full max-w-[430px] bg-white rounded-t-3xl overflow-hidden">
 
-        {/* Header */}
+        {/* Header with added count */}
         <div className="flex items-center justify-between px-5 pt-4 pb-2 shrink-0">
-          <h2 className="text-base font-bold text-rose-800">Pick Items</h2>
-          <button onClick={onClose} className="w-8 h-8 rounded-full bg-rose-50 flex items-center justify-center text-rose-400 hover:text-rose-600 hover:bg-rose-100 transition-colors">
+          <div className="flex items-center gap-2">
+            <h2 className="text-base font-bold text-rose-800">Pick Items</h2>
+            {addedCount > 0 && (
+              <span className="bg-gradient-to-r from-rose-400 to-pink-500 text-white text-xs font-bold px-2.5 py-0.5 rounded-full shadow-sm animate-bounce-in">
+                {addedCount} added
+              </span>
+            )}
+          </div>
+          <button onClick={handleClose} className="w-8 h-8 rounded-full bg-rose-50 flex items-center justify-center text-rose-400 hover:text-rose-600 hover:bg-rose-100 transition-colors">
             <X size={18} />
           </button>
         </div>
@@ -86,7 +103,7 @@ export function ItemPickerModal({ listId, isOpen, onClose, masterItems, onAdded 
             ))}
           </div>
 
-          {/* Item grid — tap to add */}
+          {/* Item grid */}
           <div className="flex-1 overflow-y-auto p-3">
             {filtered.length === 0 ? (
               <div className="flex flex-col items-center justify-center h-full text-center px-4">
@@ -120,20 +137,16 @@ export function ItemPickerModal({ listId, isOpen, onClose, masterItems, onAdded 
                           <span className="text-4xl">{EMOJI[item.category] ?? '📦'}</span>
                         )}
                       </div>
-                      {/* Name only */}
+                      {/* Name only — no price */}
                       <p className={`text-[11px] font-semibold text-center leading-tight line-clamp-2 w-full
                         ${added ? 'text-white' : 'text-rose-800'}`}>
                         {item.name}
                       </p>
-                      {/* Price */}
-                      <p className={`text-[10px] mt-0.5 ${added ? 'text-rose-100' : 'text-rose-400'}`}>
-                        ¥{item.default_price.toLocaleString()}
-                      </p>
-                      {/* Added checkmark overlay */}
+                      {/* Added overlay — checkmark */}
                       {added && (
                         <div className="absolute inset-0 flex items-center justify-center bg-rose-400/30 rounded-2xl">
                           <div className="w-10 h-10 bg-white/90 rounded-full flex items-center justify-center">
-                            <Check size={24} className="text-rose-500" strokeWidth={3} />
+                            <span className="text-rose-500 font-black text-lg">✓</span>
                           </div>
                         </div>
                       )}

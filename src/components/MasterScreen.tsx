@@ -3,7 +3,6 @@ import { useState, useEffect, useCallback } from 'react'
 import { Plus, Pencil, Trash2 } from 'lucide-react'
 import { supabase } from '@/lib/supabase/client'
 import { MasterItemModal } from '@/components/MasterItemModal'
-import { EmptyState } from '@/components/EmptyState'
 import type { Category, MasterItem } from '@/types/database'
 
 const CATEGORY_EMOJI: Record<Category | string, string> = {
@@ -26,6 +25,7 @@ export function MasterScreen({ onMasterItemsChange }: Props) {
   const [items, setItems] = useState<MasterItem[]>([])
   const [modalOpen, setModalOpen] = useState(false)
   const [editItem, setEditItem] = useState<MasterItem | undefined>()
+  const [pendingDeleteId, setPendingDeleteId] = useState<string | null>(null)
 
   const loadItems = useCallback(async () => {
     const { data } = await supabase.from('sl_master_items').select('*').order('category').order('name')
@@ -34,10 +34,12 @@ export function MasterScreen({ onMasterItemsChange }: Props) {
 
   useEffect(() => { loadItems() }, [loadItems])
 
-  const deleteItem = async (id: string) => {
+  const confirmDelete = async () => {
+    if (!pendingDeleteId) return
+    const id = pendingDeleteId
+    setPendingDeleteId(null)
     setItems(prev => prev.filter(i => i.id !== id))
     await supabase.from('sl_master_items').delete().eq('id', id)
-    // Also update parent so picker stays in sync
     onMasterItemsChange(items.filter(i => i.id !== id))
   }
 
@@ -59,9 +61,16 @@ export function MasterScreen({ onMasterItemsChange }: Props) {
       </div>
 
       <div className="flex-1 overflow-y-auto px-4 pb-24 space-y-4">
+        {/* Empty state — clickable to open Add modal */}
         {items.length === 0 && (
-          <EmptyState icon={<Plus size={40} />} title="No items yet"
-            subtitle="Register items you buy often so you can quickly add them to your list!" />
+          <button onClick={() => { setEditItem(undefined); setModalOpen(true) }}
+            className="flex flex-col items-center justify-center py-20 gap-4 text-center px-8 w-full hover:opacity-80 active:scale-95 transition-all cursor-pointer">
+            <div className="w-20 h-20 bg-gradient-to-br from-rose-400 to-pink-500 rounded-3xl flex items-center justify-center shadow-lg shadow-rose-200/50">
+              <Plus size={32} className="text-white" strokeWidth={2.5} />
+            </div>
+            <p className="text-rose-800 font-semibold text-lg">No items yet</p>
+            <p className="text-rose-400 text-sm">Tap here to add items you buy often!</p>
+          </button>
         )}
 
         {Object.entries(grouped).map(([cat, catItems]) => (
@@ -88,13 +97,13 @@ export function MasterScreen({ onMasterItemsChange }: Props) {
                     <p className="text-[10px] font-semibold text-rose-800 line-clamp-1">{item.name}</p>
                     <p className="text-[9px] text-rose-400">¥{item.default_price.toLocaleString()}</p>
                   </div>
-                  {/* Edit/Delete overlay on hover/long press */}
+                  {/* Edit/Delete overlay */}
                   <div className="absolute inset-0 bg-black/40 opacity-0 group-hover:opacity-100 transition-opacity flex items-center justify-center gap-2 rounded-xl">
                     <button onClick={() => { setEditItem(item); setModalOpen(true) }}
                       className="w-8 h-8 bg-white rounded-full flex items-center justify-center shadow" aria-label="Edit">
                       <Pencil size={13} className="text-rose-500" />
                     </button>
-                    <button onClick={() => deleteItem(item.id)}
+                    <button onClick={() => setPendingDeleteId(item.id)}
                       className="w-8 h-8 bg-white rounded-full flex items-center justify-center shadow" aria-label="Delete">
                       <Trash2 size={13} className="text-rose-400" />
                     </button>
@@ -105,6 +114,28 @@ export function MasterScreen({ onMasterItemsChange }: Props) {
           </div>
         ))}
       </div>
+
+      {/* Delete confirmation popup */}
+      {pendingDeleteId && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center px-8">
+          <div className="absolute inset-0 bg-black/30" onClick={() => setPendingDeleteId(null)} />
+          <div className="relative bg-white rounded-3xl p-6 w-full max-w-[300px] text-center space-y-3 shadow-xl">
+            <p className="text-2xl">🗑️</p>
+            <p className="font-bold text-rose-800">Delete this item?</p>
+            <p className="text-sm text-rose-400">It will be removed from My Items.</p>
+            <div className="flex gap-3">
+              <button onClick={() => setPendingDeleteId(null)}
+                className="flex-1 border border-rose-200 text-rose-400 rounded-2xl py-2.5 text-sm font-medium hover:bg-rose-50 transition-colors">
+                Cancel
+              </button>
+              <button onClick={confirmDelete}
+                className="flex-1 bg-gradient-to-r from-rose-400 to-pink-500 text-white rounded-2xl py-2.5 text-sm font-semibold transition-colors">
+                Delete
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
 
       <MasterItemModal item={editItem} isOpen={modalOpen}
         onClose={() => setModalOpen(false)} onSave={loadItems} />
