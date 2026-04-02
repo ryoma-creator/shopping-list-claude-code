@@ -1,20 +1,30 @@
-import { useState, useEffect, useCallback } from 'react'
+import { useState, useEffect, useCallback, useRef } from 'react'
 import { supabase } from '@/lib/supabase/client'
+import { offlineCache } from '@/lib/offlineCache'
 import type { User, AuthError } from '@supabase/supabase-js'
 
 export function useAuth() {
   const [user, setUser] = useState<User | null>(null)
   const [loading, setLoading] = useState(true)
+  const prevUserId = useRef<string | null>(null)
 
   useEffect(() => {
     supabase.auth.getSession().then(({ data: { session } }) => {
-      setUser(session?.user ?? null)
+      const u = session?.user ?? null
+      setUser(u)
+      prevUserId.current = u?.id ?? null
       setLoading(false)
     })
 
     const { data: { subscription } } = supabase.auth.onAuthStateChange(
       (_event, session) => {
-        setUser(session?.user ?? null)
+        const u = session?.user ?? null
+        // Clear cache when user changes (sign out or different user signs in)
+        if (prevUserId.current && prevUserId.current !== u?.id) {
+          offlineCache.clear()
+        }
+        prevUserId.current = u?.id ?? null
+        setUser(u)
       }
     )
 
@@ -32,11 +42,14 @@ export function useAuth() {
   }, [])
 
   const signIn = useCallback(async (email: string, password: string): Promise<AuthError | null> => {
+    // Clear previous user's cache before signing in
+    offlineCache.clear()
     const { error } = await supabase.auth.signInWithPassword({ email, password })
     return error
   }, [])
 
   const signOut = useCallback(async () => {
+    offlineCache.clear()
     await supabase.auth.signOut()
   }, [])
 

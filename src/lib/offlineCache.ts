@@ -28,4 +28,11 @@ export const offlineCache = {
 
   saveMasterItems: (items: unknown) => save(KEYS.masterItems, items),
   loadMasterItems: <T>() => load<T>(KEYS.masterItems),
+
+  /** Clear all cached data (call on sign-out / user switch) */
+  clear: () => {
+    try {
+      Object.values(KEYS).forEach((k) => localStorage.removeItem(k))
+    } catch { /* ignore */ }
+  },
 }
