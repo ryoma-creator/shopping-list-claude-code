@@ -164,10 +164,11 @@ export function TodayScreen({ masterItems }: Props) {
             subtitle="Tap + to add from My Items" />
         )}
 
-        {/* Animating-out items (still visible but sliding) */}
+        {/* Animating items: ポン！と縮んで消える */}
         {leaving.map(item => (
-          <ItemRow key={item.id} item={item} isLeaving
-            onToggle={handleToggle} onDeleteRequest={setPendingDeleteId} />
+          <div key={item.id} className="animate-check-off overflow-hidden">
+            <ItemRow item={item} onToggle={handleToggle} onDeleteRequest={setPendingDeleteId} />
+          </div>
         ))}
 
         {/* Unchecked items */}

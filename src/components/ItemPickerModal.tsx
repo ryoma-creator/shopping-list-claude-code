@@ -1,10 +1,29 @@
 'use client'
-// Item picker modal — add items from My Items or add custom
+// Item picker — category tabs + grid selection (like a real shopping app)
 import { useState } from 'react'
-import { X, Plus } from 'lucide-react'
+import { X, Plus, Check } from 'lucide-react'
 import { supabase } from '@/lib/supabase/client'
-import { CategoryBadge } from '@/components/CategoryBadge'
-import type { Category, MasterItem } from '@/types/database'
+import type { MasterItem } from '@/types/database'
+
+const TABS = [
+  { value: 'all',        emoji: '🛒', label: 'All' },
+  { value: 'meat',       emoji: '🥩', label: 'Meat' },
+  { value: 'fish',       emoji: '🐟', label: 'Fish' },
+  { value: 'dairy',      emoji: '🥛', label: 'Dairy' },
+  { value: 'fruits',     emoji: '🍎', label: 'Fruits' },
+  { value: 'vegetables', emoji: '🥦', label: 'Veggies' },
+  { value: 'frozen',     emoji: '🧊', label: 'Frozen' },
+  { value: 'bakery',     emoji: '🍞', label: 'Bakery' },
+  { value: 'drinks',     emoji: '🥤', label: 'Drinks' },
+  { value: 'snacks',     emoji: '🍿', label: 'Snacks' },
+  { value: 'other',      emoji: '📦', label: 'Other' },
+]
+
+const EMOJI: Record<string, string> = {
+  meat: '🥩', fish: '🐟', dairy: '🥛', fruits: '🍎',
+  vegetables: '🥦', frozen: '🧊', bakery: '🍞', drinks: '🥤',
+  snacks: '🍿', other: '📦',
+}
 
 interface Props {
   listId: string
@@ -15,146 +34,133 @@ interface Props {
 }
 
 export function ItemPickerModal({ listId, isOpen, onClose, masterItems, onAdded }: Props) {
+  const [activeTab, setActiveTab] = useState('all')
+  const [justAdded, setJustAdded] = useState<Set<string>>(new Set())
+  const [showCustom, setShowCustom] = useState(false)
   const [customName, setCustomName] = useState('')
   const [customPrice, setCustomPrice] = useState(0)
   const [customQty, setCustomQty] = useState(1)
-  const [adding, setAdding] = useState<string | null>(null)
+  const [addingCustom, setAddingCustom] = useState(false)
 
-  // Add an item from My Items
-  const addMasterItem = async (masterItem: MasterItem) => {
-    setAdding(masterItem.id)
-    try {
-      await supabase.from('sl_list_items').insert({
-        list_id: listId,
-        master_item_id: masterItem.id,
-        name: masterItem.name,
-        price: masterItem.default_price,
-        qty: masterItem.default_qty,
-        is_checked: false,
-        sort_order: masterItems.length,
-      })
-      onAdded?.()
-    } finally {
-      setAdding(null)
-    }
+  const filtered = activeTab === 'all' ? masterItems
+    : masterItems.filter(i => i.category === activeTab)
+
+  const addItem = async (item: MasterItem) => {
+    if (justAdded.has(item.id)) return
+    setJustAdded(prev => new Set([...prev, item.id]))
+    await supabase.from('sl_list_items').insert({
+      list_id: listId, master_item_id: item.id, name: item.name,
+      price: item.default_price, qty: item.default_qty,
+      is_checked: false, sort_order: masterItems.length,
+    })
+    onAdded?.()
+    setTimeout(() => setJustAdded(prev => { const s = new Set(prev); s.delete(item.id); return s }), 800)
   }
 
-  // Add a custom one-off item
-  const addCustomItem = async () => {
+  const addCustom = async () => {
     if (!customName.trim()) return
-    setAdding('custom')
+    setAddingCustom(true)
     try {
       await supabase.from('sl_list_items').insert({
-        list_id: listId,
-        master_item_id: null,
-        name: customName.trim(),
-        price: customPrice,
-        qty: customQty,
-        is_checked: false,
-        sort_order: masterItems.length,
+        list_id: listId, master_item_id: null, name: customName.trim(),
+        price: customPrice, qty: customQty, is_checked: false, sort_order: masterItems.length,
       })
-      setCustomName('')
-      setCustomPrice(0)
-      setCustomQty(1)
-      onAdded?.()
-    } finally {
-      setAdding(null)
-    }
+      setCustomName(''); setCustomPrice(0); setCustomQty(1)
+      onAdded?.(); setShowCustom(false)
+    } finally { setAddingCustom(false) }
   }
 
   if (!isOpen) return null
 
-  // Group master items by category
-  const grouped = masterItems.reduce<Record<string, MasterItem[]>>((acc, item) => {
-    if (!acc[item.category]) acc[item.category] = []
-    acc[item.category].push(item)
-    return acc
-  }, {})
-
   return (
     <div className="fixed inset-0 z-50 flex items-end">
       <div className="absolute inset-0 bg-black/30" onClick={onClose} />
-      <div className="relative w-full max-w-[430px] mx-auto bg-white rounded-t-3xl p-6 max-h-[80vh] flex flex-col">
-        <div className="flex items-center justify-between mb-4">
+      <div className="relative w-full max-w-[430px] mx-auto bg-white rounded-t-3xl flex flex-col" style={{ maxHeight: '85vh' }}>
+
+        {/* Header */}
+        <div className="flex items-center justify-between px-5 pt-5 pb-3 shrink-0">
           <h2 className="text-lg font-bold text-rose-800">Add to Today&apos;s List</h2>
-          <button onClick={onClose} className="text-rose-300 hover:text-rose-500">
-            <X size={20} />
-          </button>
+          <div className="flex items-center gap-2">
+            <button onClick={() => setShowCustom(v => !v)}
+              className="text-xs text-rose-400 hover:text-rose-600 border border-rose-200 rounded-xl px-3 py-1.5 transition-colors">
+              + Custom
+            </button>
+            <button onClick={onClose} className="text-rose-300 hover:text-rose-500 p-1"><X size={20} /></button>
+          </div>
         </div>
 
         {/* Custom item form */}
-        <div className="border border-rose-100 rounded-2xl p-4 mb-4 space-y-2">
-          <p className="text-xs font-semibold text-rose-500 uppercase tracking-wide">Add Custom Item</p>
-          <div>
-            <label className="text-xs text-rose-400 mb-1 block">Item name</label>
-            <input
-              type="text"
-              placeholder="e.g. Chocolate"
-              value={customName}
-              onChange={(e) => setCustomName(e.target.value)}
-              className="w-full border border-rose-200 rounded-xl px-3 py-2 text-sm text-rose-900 placeholder-rose-300 focus:outline-none focus:ring-2 focus:ring-rose-300"
-            />
-          </div>
-          <div className="flex gap-2">
-            <div className="flex-1">
-              <label className="text-xs text-rose-400 mb-1 block">Price (¥)</label>
-              <input
-                type="number"
-                min={0}
-                value={customPrice}
-                onChange={(e) => setCustomPrice(Number(e.target.value))}
-                className="w-full border border-rose-200 rounded-xl px-3 py-2 text-sm text-rose-900 focus:outline-none focus:ring-2 focus:ring-rose-300"
-              />
-            </div>
-            <div className="flex-1">
-              <label className="text-xs text-rose-400 mb-1 block">Quantity</label>
-              <input
-                type="number"
-                min={1}
-                value={customQty}
-                onChange={(e) => setCustomQty(Number(e.target.value))}
-                className="w-full border border-rose-200 rounded-xl px-3 py-2 text-sm text-rose-900 focus:outline-none focus:ring-2 focus:ring-rose-300"
-              />
-            </div>
-            <div className="flex items-end pb-0.5">
-              <button
-                onClick={addCustomItem}
-                disabled={adding === 'custom' || !customName.trim()}
-                className="bg-rose-400 hover:bg-rose-500 disabled:opacity-50 text-white rounded-xl px-3 py-2 transition-colors h-[38px]"
-              >
+        {showCustom && (
+          <div className="px-5 pb-3 space-y-2 shrink-0 border-b border-rose-50">
+            <input type="text" placeholder="Item name" value={customName}
+              onChange={e => setCustomName(e.target.value)}
+              className="w-full border border-rose-200 rounded-xl px-3 py-2 text-sm text-rose-900 placeholder-rose-300 focus:outline-none focus:ring-2 focus:ring-rose-300" />
+            <div className="flex gap-2">
+              <div className="flex-1">
+                <label className="text-xs text-rose-400 block mb-1">Price (¥)</label>
+                <input type="number" min={0} value={customPrice}
+                  onChange={e => setCustomPrice(Number(e.target.value))}
+                  className="w-full border border-rose-200 rounded-xl px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-rose-300" />
+              </div>
+              <div className="flex-1">
+                <label className="text-xs text-rose-400 block mb-1">Quantity</label>
+                <input type="number" min={1} value={customQty}
+                  onChange={e => setCustomQty(Number(e.target.value))}
+                  className="w-full border border-rose-200 rounded-xl px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-rose-300" />
+              </div>
+              <button onClick={addCustom} disabled={addingCustom || !customName.trim()}
+                className="self-end bg-rose-400 hover:bg-rose-500 disabled:opacity-50 text-white rounded-xl px-4 py-2 transition-colors h-[38px]">
                 <Plus size={16} />
               </button>
             </div>
           </div>
+        )}
+
+        {/* Category tabs */}
+        <div className="flex gap-2 overflow-x-auto px-4 py-3 shrink-0 border-b border-rose-50" style={{ scrollbarWidth: 'none' }}>
+          {TABS.map(tab => (
+            <button key={tab.value} onClick={() => setActiveTab(tab.value)}
+              className={`flex flex-col items-center gap-0.5 px-3 py-2 rounded-2xl shrink-0 transition-all text-center min-w-[52px]
+                ${activeTab === tab.value ? 'bg-rose-400 text-white shadow-sm' : 'bg-rose-50 text-rose-500 hover:bg-rose-100'}`}>
+              <span className="text-xl leading-none">{tab.emoji}</span>
+              <span className="text-[10px] font-medium leading-none mt-0.5">{tab.label}</span>
+            </button>
+          ))}
         </div>
 
-        {/* My Items list */}
-        <div className="overflow-y-auto flex-1 space-y-4">
-          {masterItems.length === 0 && (
-            <p className="text-sm text-rose-300 text-center py-4">
-              No items in My Items yet. Add some first!
+        {/* Grid */}
+        <div className="overflow-y-auto flex-1 p-4">
+          {filtered.length === 0 ? (
+            <p className="text-sm text-rose-300 text-center py-8">
+              {masterItems.length === 0 ? 'Go to My Items tab to add items first!' : 'No items in this category'}
             </p>
-          )}
-          {Object.entries(grouped).map(([cat, items]) => (
-            <div key={cat}>
-              <CategoryBadge category={cat as Category} className="mb-2" />
-              <div className="space-y-1">
-                {items.map((item) => (
-                  <button
-                    key={item.id}
-                    onClick={() => addMasterItem(item)}
-                    disabled={adding === item.id}
-                    className="w-full flex items-center justify-between px-4 py-2.5 bg-rose-50 hover:bg-rose-100 rounded-xl transition-colors disabled:opacity-50"
-                  >
-                    <span className="text-sm text-rose-800">{item.name}</span>
-                    <span className="text-xs text-rose-400">
-                      ¥{item.default_price} · Qty {item.default_qty}
-                    </span>
+          ) : (
+            <div className="grid grid-cols-3 gap-3">
+              {filtered.map(item => {
+                const added = justAdded.has(item.id)
+                return (
+                  <button key={item.id} onClick={() => addItem(item)}
+                    className={`flex flex-col items-center gap-1.5 p-3 rounded-2xl transition-all active:scale-95 relative overflow-hidden
+                      ${added ? 'bg-rose-400' : 'bg-rose-50 hover:bg-rose-100'}`}>
+                    <div className="w-14 h-14 bg-white rounded-xl flex items-center justify-center text-3xl shadow-sm">
+                      {EMOJI[item.category] ?? '📦'}
+                    </div>
+                    <p className={`text-xs font-semibold text-center leading-tight line-clamp-2 w-full ${added ? 'text-white' : 'text-rose-800'}`}>
+                      {item.name}
+                    </p>
+                    <p className={`text-[10px] ${added ? 'text-rose-100' : 'text-rose-400'}`}>
+                      ¥{item.default_price}
+                    </p>
+                    {added && (
+                      <div className="absolute inset-0 flex items-center justify-center bg-rose-400/10">
+                        <Check size={28} className="text-white drop-shadow" />
+                      </div>
+                    )}
                   </button>
-                ))}
-              </div>
+                )
+              })}
             </div>
-          ))}
+          )}
         </div>
       </div>
     </div>
