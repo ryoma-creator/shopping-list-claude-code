@@ -1,18 +1,28 @@
 'use client'
-// Shopping list item row（framer-motion アニメーション付き）
+// ショッピングリストのアイテム行（画像サムネイル付き）
 import { Trash2 } from 'lucide-react'
 import { motion } from 'framer-motion'
 import { cn } from '@/lib/utils'
-import type { ListItem } from '@/types/database'
+import type { ListItem, MasterItem } from '@/types/database'
+
+const EMOJI: Record<string, string> = {
+  meat: '🥩', fish: '🐟', dairy: '🥛', fruits: '🍎',
+  vegetables: '🥦', frozen: '🧊', bakery: '🍞', drinks: '🥤',
+  snacks: '🍿', other: '📦',
+}
 
 interface Props {
   item: ListItem
+  masterItem?: MasterItem
   onToggle: (id: string, checked: boolean) => void
   onDeleteRequest: (id: string) => void
   isLeaving?: boolean
 }
 
-export function ItemRow({ item, onToggle, onDeleteRequest, isLeaving }: Props) {
+export function ItemRow({ item, masterItem, onToggle, onDeleteRequest, isLeaving }: Props) {
+  const imageUrl = masterItem?.image_url
+  const categoryEmoji = masterItem ? (EMOJI[masterItem.category] ?? '🛒') : '🛒'
+
   return (
     <motion.div
       layout
@@ -38,11 +48,11 @@ export function ItemRow({ item, onToggle, onDeleteRequest, isLeaving }: Props) {
             }
       }
       className={cn(
-        'flex items-center gap-3 px-4 py-3 bg-white rounded-2xl border border-rose-100 overflow-hidden relative',
+        'flex items-center gap-2.5 px-3 py-2 bg-white rounded-2xl border border-rose-100 overflow-hidden relative',
         item.is_checked && 'opacity-40'
       )}
     >
-      {/* 斬るエフェクト: チェック時に斜め線がシュッと走る */}
+      {/* 斬るエフェクト */}
       {isLeaving && (
         <motion.div
           initial={{ left: '-100%', opacity: 1 }}
@@ -53,42 +63,53 @@ export function ItemRow({ item, onToggle, onDeleteRequest, isLeaving }: Props) {
         />
       )}
 
-      {/* Check circle */}
+      {/* チェックボタン兼サムネイル */}
       <button
         onClick={() => onToggle(item.id, !item.is_checked)}
         className={cn(
-          'w-7 h-7 rounded-full border-2 flex items-center justify-center flex-shrink-0 transition-all active:scale-90',
+          'w-12 h-12 rounded-xl flex items-center justify-center flex-shrink-0 transition-all active:scale-90 overflow-hidden relative',
           item.is_checked
-            ? 'bg-rose-400 border-rose-400'
-            : 'border-rose-300 hover:border-rose-400'
+            ? 'ring-2 ring-rose-400'
+            : 'ring-1 ring-rose-100'
         )}
         aria-label={item.is_checked ? 'Uncheck' : 'Check off'}
       >
+        {/* サムネイル画像 or 絵文字 */}
+        {imageUrl ? (
+          // eslint-disable-next-line @next/next/no-img-element
+          <img src={imageUrl} alt={item.name} className="w-full h-full object-cover" />
+        ) : (
+          <span className="text-2xl">{categoryEmoji}</span>
+        )}
+
+        {/* チェック済みオーバーレイ */}
         {item.is_checked && (
-          <svg className="w-3.5 h-3.5 text-white" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={3} d="M5 13l4 4L19 7" />
-          </svg>
+          <div className="absolute inset-0 bg-rose-400/70 flex items-center justify-center">
+            <svg className="w-5 h-5 text-white" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={3} d="M5 13l4 4L19 7" />
+            </svg>
+          </div>
         )}
       </button>
 
-      {/* Item info */}
+      {/* 名前（最小限のテキスト） */}
       <div className="flex-1 min-w-0">
-        <p className="text-sm font-medium text-rose-900 truncate">{item.name}</p>
-        <p className="text-xs text-rose-400">¥{item.price.toLocaleString()} × {item.qty}</p>
+        <p className="text-sm font-semibold text-rose-900 truncate">{item.name}</p>
+        <p className="text-[11px] text-rose-400">×{item.qty}</p>
       </div>
 
-      {/* Subtotal */}
-      <span className="text-sm font-semibold text-rose-700 flex-shrink-0">
+      {/* 金額 */}
+      <span className="text-sm font-bold text-rose-700 flex-shrink-0">
         ¥{(item.price * item.qty).toLocaleString()}
       </span>
 
-      {/* Delete */}
+      {/* 削除 */}
       <button
         onClick={() => onDeleteRequest(item.id)}
-        className="p-1 text-rose-300 hover:text-rose-500 transition-colors flex-shrink-0 active:scale-90"
+        className="p-1 text-rose-200 hover:text-rose-500 transition-colors flex-shrink-0 active:scale-90"
         aria-label="Delete"
       >
-        <Trash2 size={16} />
+        <Trash2 size={14} />
       </button>
     </motion.div>
   )
