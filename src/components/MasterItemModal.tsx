@@ -7,7 +7,7 @@ import type { Category, MasterItem } from '@/types/database'
 const CATEGORIES: { value: Category; emoji: string; label: string }[] = [
   { value: 'meat',       emoji: '🥩', label: 'Meat' },
   { value: 'fish',       emoji: '🐟', label: 'Fish' },
-  { value: 'dairy',      emoji: '🥛', label: 'Dairy' },
+  { value: 'dairy',      emoji: '🥛', label: 'Milk' },
   { value: 'fruits',     emoji: '🍎', label: 'Fruits' },
   { value: 'vegetables', emoji: '🥦', label: 'Veggies' },
   { value: 'frozen',     emoji: '🧊', label: 'Frozen' },

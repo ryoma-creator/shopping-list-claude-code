@@ -13,7 +13,7 @@ const CATEGORY_EMOJI: Record<Category | string, string> = {
 }
 
 const CATEGORY_LABEL: Record<Category | string, string> = {
-  meat: 'Meat', fish: 'Fish', dairy: 'Dairy', fruits: 'Fruits',
+  meat: 'Meat', fish: 'Fish', dairy: 'Milk', fruits: 'Fruits',
   vegetables: 'Veggies', frozen: 'Frozen', bakery: 'Bakery',
   drinks: 'Drinks', snacks: 'Snacks', other: 'Other',
 }

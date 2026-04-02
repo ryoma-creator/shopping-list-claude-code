@@ -10,7 +10,7 @@ const CATS = [
   { value: 'vegetables', emoji: '🥦', label: 'Veggies' },
   { value: 'meat',       emoji: '🥩', label: 'Meat' },
   { value: 'fish',       emoji: '🐟', label: 'Fish' },
-  { value: 'dairy',      emoji: '🥛', label: 'Dairy' },
+  { value: 'dairy',      emoji: '🥛', label: 'Milk' },
   { value: 'bakery',     emoji: '🍞', label: 'Bread' },
   { value: 'snacks',     emoji: '🍿', label: 'Snacks' },
   { value: 'drinks',     emoji: '🥤', label: 'Drinks' },
