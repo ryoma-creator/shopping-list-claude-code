@@ -7,13 +7,11 @@ export function useAuth() {
   const [loading, setLoading] = useState(true)
 
   useEffect(() => {
-    // Restore session on mount
     supabase.auth.getSession().then(({ data: { session } }) => {
       setUser(session?.user ?? null)
       setLoading(false)
     })
 
-    // Listen for auth state changes (login, logout, token refresh)
     const { data: { subscription } } = supabase.auth.onAuthStateChange(
       (_event, session) => {
         setUser(session?.user ?? null)
@@ -23,8 +21,13 @@ export function useAuth() {
     return () => subscription.unsubscribe()
   }, [])
 
-  const signUp = useCallback(async (email: string, password: string): Promise<AuthError | null> => {
-    const { error } = await supabase.auth.signUp({ email, password })
+  /** Sign up with display name stored in user_metadata */
+  const signUp = useCallback(async (email: string, password: string, displayName?: string): Promise<AuthError | null> => {
+    const { error } = await supabase.auth.signUp({
+      email,
+      password,
+      options: displayName ? { data: { display_name: displayName } } : undefined,
+    })
     return error
   }, [])
 
@@ -37,5 +40,10 @@ export function useAuth() {
     await supabase.auth.signOut()
   }, [])
 
-  return { user, loading, signUp, signIn, signOut }
+  /** Get display name from user metadata, fallback to email prefix */
+  const displayName = user?.user_metadata?.display_name
+    || user?.email?.split('@')[0]
+    || 'User'
+
+  return { user, loading, displayName, signUp, signIn, signOut }
 }
