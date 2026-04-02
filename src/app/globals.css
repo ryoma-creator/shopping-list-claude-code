@@ -1,0 +1,30 @@
+@import "tailwindcss";
+
+/* ピンク系デザインテーマ */
+:root {
+  --bg-app: #fff1f2;
+  --bg-card: #ffffff;
+  --color-primary: #fb7185;
+  --color-primary-light: #fecdd3;
+  --color-text: #881337;
+  --color-text-muted: #be123c;
+}
+
+* {
+  box-sizing: border-box;
+  -webkit-tap-highlight-color: transparent;
+}
+
+body {
+  background-color: var(--bg-app);
+  color: var(--color-text);
+  font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif;
+  max-width: 430px;
+  margin: 0 auto;
+  min-height: 100vh;
+}
+
+/* スクロールバーを非表示 */
+::-webkit-scrollbar {
+  display: none;
+}
