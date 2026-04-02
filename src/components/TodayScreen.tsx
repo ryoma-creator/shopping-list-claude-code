@@ -59,8 +59,10 @@ export function TodayScreen({ masterItems }: Props) {
     const { data, error } = await supabase.from('sl_list_items').select('*')
       .eq('list_id', listId).order('sort_order')
     if (error) {
-      // Network error → keep cached items
+      // Network error → reload from local cache (which includes offline-added items)
       console.error('loadItems error (offline?):', error.message)
+      const cached = offlineCache.loadTodayItems<ListItem[]>()
+      if (cached) setItems(cached)
       return
     }
     if (data) {

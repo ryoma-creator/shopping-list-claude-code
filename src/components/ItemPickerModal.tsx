@@ -2,7 +2,8 @@
 import { useState, useRef } from 'react'
 import { X } from 'lucide-react'
 import { supabase } from '@/lib/supabase/client'
-import type { MasterItem } from '@/types/database'
+import { offlineCache } from '@/lib/offlineCache'
+import type { MasterItem, ListItem } from '@/types/database'
 
 const CATS = [
   { value: 'all',        emoji: '🛒', label: 'All' },
@@ -47,19 +48,42 @@ export function ItemPickerModal({ listId, isOpen, onClose, masterItems, onAdded 
     countRef.current += 1
     setAddedCount(countRef.current)
 
-    if (!navigator.onLine) {
-      alert('You need internet to add items. Please connect to WiFi.')
-      setJustAdded(prev => { const s = new Set(prev); s.delete(item.id); return s })
-      countRef.current -= 1
-      setAddedCount(countRef.current)
-      return
-    }
-
-    const { error } = await supabase.from('sl_list_items').insert({
+    const row = {
       list_id: listId, master_item_id: item.id, name: item.name,
       price: item.default_price, qty: item.default_qty,
       is_checked: false, sort_order: masterItems.length,
-    })
+    }
+
+    if (!navigator.onLine) {
+      // Offline → save locally with temp id, queue for later sync
+      const tempId = `temp_${Date.now()}_${Math.random().toString(36).slice(2)}`
+      const localItem: ListItem = {
+        id: tempId,
+        list_id: listId,
+        master_item_id: item.id,
+        name: item.name,
+        price: item.default_price,
+        qty: item.default_qty,
+        is_checked: false,
+        sort_order: masterItems.length,
+        created_at: new Date().toISOString(),
+      }
+      // Add to cached items
+      const cached = offlineCache.loadTodayItems<ListItem[]>() ?? []
+      cached.push(localItem)
+      offlineCache.saveTodayItems(cached)
+      // Queue the insert for when we're back online
+      offlineCache.addPendingOp({
+        id: tempId,
+        type: 'insert_list_item',
+        payload: row,
+        createdAt: Date.now(),
+      })
+      onAdded?.()
+      return
+    }
+
+    const { error } = await supabase.from('sl_list_items').insert(row)
     if (error) {
       console.error('Insert list item failed:', error.message)
       setJustAdded(prev => { const s = new Set(prev); s.delete(item.id); return s })
