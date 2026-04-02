@@ -36,17 +36,25 @@ export function TodayScreen({ masterItems }: Props) {
 
   const loadTodayList = useCallback(async () => {
     const today = new Date().toLocaleDateString('en-CA')
-    const { data } = await supabase.from('sl_shopping_lists').select('*')
+    const { data, error } = await supabase.from('sl_shopping_lists').select('*')
       .eq('is_template', false).eq('name', today).limit(1)
+    if (error) console.error('loadTodayList error:', error.message)
     if (data && data.length > 0) {
       setList(data[0])
       offlineCache.saveTodayList(data[0])
+    } else {
+      // List not found (deleted or first time) → reset state
+      setList(null)
+      setItems([])
+      offlineCache.saveTodayList(null)
+      offlineCache.saveTodayItems([])
     }
   }, [])
 
   const loadItems = useCallback(async (listId: string) => {
-    const { data } = await supabase.from('sl_list_items').select('*')
+    const { data, error } = await supabase.from('sl_list_items').select('*')
       .eq('list_id', listId).order('sort_order')
+    if (error) console.error('loadItems error:', error.message)
     if (data) {
       setItems(data)
       offlineCache.saveTodayItems(data)
@@ -55,8 +63,13 @@ export function TodayScreen({ masterItems }: Props) {
 
   const createTodayList = async () => {
     const today = new Date().toLocaleDateString('en-CA')
-    const { data } = await supabase.from('sl_shopping_lists')
+    const { data, error } = await supabase.from('sl_shopping_lists')
       .insert({ name: today, is_template: false }).select().single()
+    if (error) {
+      console.error('createTodayList error:', error.message)
+      alert(`Failed to create list: ${error.message}`)
+      return
+    }
     if (data) { setList(data); celebratedRef.current = false }
   }
 
