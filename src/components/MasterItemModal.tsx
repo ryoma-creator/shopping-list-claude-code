@@ -1,7 +1,7 @@
 'use client'
-// Add / Edit item modal for My Items
-import { useState, useEffect } from 'react'
-import { X } from 'lucide-react'
+// Add / Edit item modal for My Items（写真アップロード対応）
+import { useState, useEffect, useRef } from 'react'
+import { X, Camera } from 'lucide-react'
 import { supabase } from '@/lib/supabase/client'
 import type { Category, MasterItem } from '@/types/database'
 
@@ -18,6 +18,12 @@ const CATEGORIES: { value: Category; label: string }[] = [
   { value: 'other',      label: 'Other' },
 ]
 
+const CATEGORY_EMOJI: Record<string, string> = {
+  meat: '🥩', fish: '🐟', dairy: '🥛', fruits: '🍎',
+  vegetables: '🥦', frozen: '🧊', bakery: '🍞', drinks: '🥤',
+  snacks: '🍿', other: '📦',
+}
+
 interface Props {
   item?: MasterItem
   isOpen: boolean
@@ -30,22 +36,57 @@ export function MasterItemModal({ item, isOpen, onClose, onSave }: Props) {
   const [category, setCategory] = useState<Category>('other')
   const [price, setPrice] = useState(0)
   const [qty, setQty] = useState(1)
+  const [imageUrl, setImageUrl] = useState<string | null>(null)
+  const [uploading, setUploading] = useState(false)
   const [loading, setLoading] = useState(false)
+  const fileInputRef = useRef<HTMLInputElement>(null)
 
-  // Pre-fill form when editing
+  // フォーム初期化
   useEffect(() => {
     if (item) {
       setName(item.name)
       setCategory(item.category)
       setPrice(item.default_price)
       setQty(item.default_qty)
+      setImageUrl(item.image_url ?? null)
     } else {
       setName('')
       setCategory('other')
       setPrice(0)
       setQty(1)
+      setImageUrl(null)
     }
   }, [item, isOpen])
+
+  // 写真アップロード
+  const handleImageUpload = async (e: React.ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0]
+    if (!file) return
+
+    setUploading(true)
+    try {
+      const ext = file.name.split('.').pop()
+      const fileName = `${Date.now()}-${Math.random().toString(36).slice(2)}.${ext}`
+      const filePath = `items/${fileName}`
+
+      const { error } = await supabase.storage
+        .from('item-images')
+        .upload(filePath, file, { cacheControl: '3600', upsert: false })
+
+      if (error) {
+        console.error('Upload error:', error)
+        return
+      }
+
+      const { data: urlData } = supabase.storage
+        .from('item-images')
+        .getPublicUrl(filePath)
+
+      setImageUrl(urlData.publicUrl)
+    } finally {
+      setUploading(false)
+    }
+  }
 
   const handleSave = async () => {
     if (!name.trim()) return
@@ -54,12 +95,12 @@ export function MasterItemModal({ item, isOpen, onClose, onSave }: Props) {
       if (item) {
         await supabase
           .from('sl_master_items')
-          .update({ name, category, default_price: price, default_qty: qty })
+          .update({ name, category, default_price: price, default_qty: qty, image_url: imageUrl })
           .eq('id', item.id)
       } else {
         await supabase
           .from('sl_master_items')
-          .insert({ name, category, default_price: price, default_qty: qty })
+          .insert({ name, category, default_price: price, default_qty: qty, image_url: imageUrl })
       }
       onSave()
       onClose()
@@ -84,6 +125,47 @@ export function MasterItemModal({ item, isOpen, onClose, onSave }: Props) {
             <X size={20} />
           </button>
         </div>
+
+        {/* 写真アップロード */}
+        <div className="flex items-center gap-4">
+          <button
+            onClick={() => fileInputRef.current?.click()}
+            disabled={uploading}
+            className="w-20 h-20 rounded-2xl border-2 border-dashed border-rose-200 flex flex-col items-center justify-center gap-1 hover:border-rose-400 hover:bg-rose-50 transition-colors overflow-hidden flex-shrink-0"
+          >
+            {imageUrl ? (
+              // eslint-disable-next-line @next/next/no-img-element
+              <img src={imageUrl} alt="Item" className="w-full h-full object-cover" />
+            ) : uploading ? (
+              <span className="text-xs text-rose-400">...</span>
+            ) : (
+              <>
+                <Camera size={20} className="text-rose-300" />
+                <span className="text-[10px] text-rose-300 font-medium">Add Photo</span>
+              </>
+            )}
+          </button>
+          <input
+            ref={fileInputRef}
+            type="file"
+            accept="image/*"
+            capture="environment"
+            onChange={handleImageUpload}
+            className="hidden"
+          />
+
+          {/* カテゴリ絵文字プレビュー */}
+          {!imageUrl && (
+            <div className="w-20 h-20 bg-rose-50 rounded-2xl flex items-center justify-center text-4xl flex-shrink-0">
+              {CATEGORY_EMOJI[category] ?? '📦'}
+            </div>
+          )}
+
+          <p className="text-xs text-rose-400 flex-1">
+            {imageUrl ? 'Tap photo to change' : 'Take a photo or pick from gallery'}
+          </p>
+        </div>
+
         <div className="space-y-3">
           <div>
             <label className="text-xs text-rose-400 mb-1 block">Item name</label>

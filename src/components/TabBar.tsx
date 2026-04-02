@@ -18,7 +18,7 @@ interface Props {
 
 export function TabBar({ activeTab, onTabChange }: Props) {
   return (
-    <nav className="fixed bottom-0 left-0 right-0 max-w-[430px] mx-auto bg-white border-t border-rose-100 flex safe-area-pb">
+    <nav className="fixed bottom-0 left-0 right-0 max-w-[430px] mx-auto bg-white border-t border-rose-100 flex z-50 pb-[env(safe-area-inset-bottom)]">
       {TABS.map(({ id, icon: Icon, label }) => (
         <button
           key={id}

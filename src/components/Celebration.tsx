@@ -1,39 +1,46 @@
 'use client'
-// 全完了時の祝福演出コンポーネント
-import { useMemo } from 'react'
-
-const COLORS = ['#fb7185', '#f9a8d4', '#fda4af', '#f472b6', '#fbbf24', '#a3e635', '#60a5fa']
-
-interface Piece {
-  id: number
-  left: number
-  delay: number
-  duration: number
-  color: string
-  size: number
-  isCircle: boolean
-}
-
-function useConfetti(count: number): Piece[] {
-  return useMemo(() =>
-    Array.from({ length: count }, (_, i) => ({
-      id: i,
-      left: Math.random() * 100,
-      delay: Math.random() * 1.8,
-      duration: 2.2 + Math.random() * 1.5,
-      color: COLORS[Math.floor(Math.random() * COLORS.length)],
-      size: 7 + Math.random() * 9,
-      isCircle: i % 3 === 0,
-    })),
-  [count])
-}
+// 全完了時の祝福演出コンポーネント（canvas-confetti使用）
+import { useEffect, useCallback } from 'react'
+import confetti from 'canvas-confetti'
 
 interface Props {
   onDismiss: () => void
 }
 
 export function Celebration({ onDismiss }: Props) {
-  const pieces = useConfetti(70)
+  // 紙吹雪を打ち上げる
+  const fireConfetti = useCallback(() => {
+    // 左から
+    confetti({
+      particleCount: 80,
+      spread: 70,
+      origin: { x: 0.15, y: 0.6 },
+      colors: ['#fb7185', '#f9a8d4', '#fda4af', '#f472b6', '#fbbf24', '#a3e635', '#60a5fa'],
+    })
+    // 右から
+    confetti({
+      particleCount: 80,
+      spread: 70,
+      origin: { x: 0.85, y: 0.6 },
+      colors: ['#fb7185', '#f9a8d4', '#fda4af', '#f472b6', '#fbbf24', '#a3e635', '#60a5fa'],
+    })
+    // 中央上から少し遅れて
+    setTimeout(() => {
+      confetti({
+        particleCount: 120,
+        spread: 100,
+        origin: { x: 0.5, y: 0.4 },
+        colors: ['#fb7185', '#f9a8d4', '#fbbf24', '#a3e635', '#60a5fa'],
+      })
+    }, 300)
+  }, [])
+
+  useEffect(() => {
+    fireConfetti()
+    // 1.5秒後にもう一回
+    const timer = setTimeout(fireConfetti, 1500)
+    return () => clearTimeout(timer)
+  }, [fireConfetti])
 
   return (
     <div
@@ -41,25 +48,6 @@ export function Celebration({ onDismiss }: Props) {
       style={{ background: 'rgba(255,241,242,0.85)', backdropFilter: 'blur(4px)' }}
       onClick={onDismiss}
     >
-      {/* 紙吹雪 */}
-      <div className="absolute inset-0 overflow-hidden pointer-events-none">
-        {pieces.map((p) => (
-          <div
-            key={p.id}
-            className="absolute top-0 animate-confetti"
-            style={{
-              left: `${p.left}%`,
-              width: p.size,
-              height: p.size,
-              backgroundColor: p.color,
-              borderRadius: p.isCircle ? '50%' : '2px',
-              animationDelay: `${p.delay}s`,
-              animationDuration: `${p.duration}s`,
-            }}
-          />
-        ))}
-      </div>
-
       {/* メッセージ */}
       <div className="text-center space-y-3 animate-bounce-in px-8">
         <div className="text-7xl" style={{ animation: 'bounce 0.8s infinite' }}>🎉</div>

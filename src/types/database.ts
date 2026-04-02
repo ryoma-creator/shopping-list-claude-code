@@ -28,6 +28,7 @@ export type Database = {
           category: Category
           default_price: number
           default_qty: number
+          image_url: string | null
           created_at: string
         }
         Insert: {
@@ -36,6 +37,7 @@ export type Database = {
           category: Category
           default_price?: number
           default_qty?: number
+          image_url?: string | null
           created_at?: string
         }
         Update: {
@@ -44,6 +46,7 @@ export type Database = {
           category?: Category
           default_price?: number
           default_qty?: number
+          image_url?: string | null
           created_at?: string
         }
         Relationships: []

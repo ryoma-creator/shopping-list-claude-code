@@ -142,8 +142,13 @@ export function ItemPickerModal({ listId, isOpen, onClose, masterItems, onAdded 
                   <button key={item.id} onClick={() => addItem(item)}
                     className={`flex flex-col items-center gap-1.5 p-3 rounded-2xl transition-all active:scale-95 relative overflow-hidden
                       ${added ? 'bg-rose-400' : 'bg-rose-50 hover:bg-rose-100'}`}>
-                    <div className="w-14 h-14 bg-white rounded-xl flex items-center justify-center text-3xl shadow-sm">
-                      {EMOJI[item.category] ?? '📦'}
+                    <div className="w-14 h-14 bg-white rounded-xl flex items-center justify-center text-3xl shadow-sm overflow-hidden">
+                      {item.image_url ? (
+                        // eslint-disable-next-line @next/next/no-img-element
+                        <img src={item.image_url} alt={item.name} className="w-full h-full object-cover" />
+                      ) : (
+                        EMOJI[item.category] ?? '📦'
+                      )}
                     </div>
                     <p className={`text-xs font-semibold text-center leading-tight line-clamp-2 w-full ${added ? 'text-white' : 'text-rose-800'}`}>
                       {item.name}

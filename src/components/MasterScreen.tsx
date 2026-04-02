@@ -1,5 +1,5 @@
 'use client'
-// My Items screen — register frequently bought items
+// My Items screen — register frequently bought items（写真対応）
 import { useState, useEffect, useCallback } from 'react'
 import { Plus, Pencil, Trash2 } from 'lucide-react'
 import { supabase } from '@/lib/supabase/client'
@@ -65,26 +65,31 @@ export function MasterScreen({ onMasterItemsChange }: Props) {
 
         {Object.entries(grouped).map(([cat, catItems]) => (
           <div key={cat}>
-            {/* Category header */}
+            {/* カテゴリヘッダー */}
             <div className="flex items-center gap-2 mb-2">
               <span className="text-lg">{CATEGORY_EMOJI[cat] ?? '📦'}</span>
               <span className="text-sm font-bold text-rose-700">{CATEGORY_LABEL[cat] ?? cat}</span>
               <span className="text-xs text-rose-300 ml-1">({catItems.length})</span>
             </div>
 
-            {/* Items list with emoji thumbnails */}
+            {/* アイテムリスト（写真サムネイル対応） */}
             <div className="space-y-1.5">
               {catItems.map(item => (
                 <div key={item.id}
                   className="flex items-center gap-3 bg-white rounded-2xl border border-rose-100 px-3 py-2.5">
-                  {/* Emoji thumbnail */}
-                  <div className="w-11 h-11 bg-rose-50 rounded-xl flex items-center justify-center text-2xl flex-shrink-0">
-                    {CATEGORY_EMOJI[item.category] ?? '📦'}
+                  {/* サムネイル: 写真があれば写真、なければ絵文字 */}
+                  <div className="w-11 h-11 bg-rose-50 rounded-xl flex items-center justify-center text-2xl flex-shrink-0 overflow-hidden">
+                    {item.image_url ? (
+                      // eslint-disable-next-line @next/next/no-img-element
+                      <img src={item.image_url} alt={item.name} className="w-full h-full object-cover" />
+                    ) : (
+                      CATEGORY_EMOJI[item.category] ?? '📦'
+                    )}
                   </div>
                   {/* Info */}
                   <div className="flex-1 min-w-0">
                     <p className="text-sm font-semibold text-rose-900 truncate">{item.name}</p>
-                    <p className="text-xs text-rose-400">Price: ¥{item.default_price.toLocaleString()} · Qty: {item.default_qty}</p>
+                    <p className="text-xs text-rose-400">¥{item.default_price.toLocaleString()} × {item.default_qty}</p>
                   </div>
                   {/* Edit */}
                   <button onClick={() => { setEditItem(item); setModalOpen(true) }}

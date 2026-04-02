@@ -2,6 +2,7 @@
 // Today's shopping list — game-like experience
 import { useState, useEffect, useCallback, useRef } from 'react'
 import { Plus, Save, X } from 'lucide-react'
+import { AnimatePresence } from 'framer-motion'
 import { supabase } from '@/lib/supabase/client'
 import { ItemRow } from '@/components/ItemRow'
 import { TotalBar } from '@/components/TotalBar'
@@ -43,7 +44,7 @@ export function TodayScreen({ masterItems }: Props) {
     if (data) { setList(data); celebratedRef.current = false }
   }
 
-  // Check with swipe-out animation
+  // チェック時: 斬るアニメーション → カートへ移動
   const handleToggle = (id: string, checked: boolean) => {
     if (checked) {
       setAnimatingIds(prev => new Set([...prev, id]))
@@ -51,7 +52,7 @@ export function TodayScreen({ masterItems }: Props) {
         setAnimatingIds(prev => { const s = new Set(prev); s.delete(id); return s })
         setItems(prev => prev.map(i => i.id === id ? { ...i, is_checked: true } : i))
         supabase.from('sl_list_items').update({ is_checked: true }).eq('id', id)
-      }, 380)
+      }, 500)
     } else {
       setItems(prev => prev.map(i => i.id === id ? { ...i, is_checked: false } : i))
       supabase.from('sl_list_items').update({ is_checked: false }).eq('id', id)
@@ -86,7 +87,7 @@ export function TodayScreen({ masterItems }: Props) {
     } finally { setSaving(false) }
   }
 
-  // Trigger celebration when all items are checked
+  // 全完了時の祝福演出
   useEffect(() => {
     const allDone = items.length > 0 && items.every(i => i.is_checked)
     const noneAnimating = animatingIds.size === 0
@@ -113,7 +114,7 @@ export function TodayScreen({ masterItems }: Props) {
   const leaving = items.filter(i => animatingIds.has(i.id))
   const remaining = unchecked.length + leaving.length
 
-  // Remaining counter text
+  // 残りカウンターテキスト
   const counterText = items.length === 0 ? null
     : remaining === 0 ? '🎉 All done!'
     : remaining === 1 ? '🔥 Last one!'
@@ -147,37 +148,38 @@ export function TodayScreen({ masterItems }: Props) {
         </button>
       </div>
 
-      {/* Remaining counter */}
+      {/* 残りカウンター */}
       {counterText && (
         <div className="px-4 pb-2 shrink-0">
-          <p key={remaining} className={`text-sm font-bold text-rose-500 animate-pulse-scale
-            ${remaining === 0 ? 'text-rose-400' : remaining === 1 ? 'text-orange-500' : ''}`}>
+          <p key={remaining} className={`text-sm font-bold animate-pulse-scale
+            ${remaining === 0 ? 'text-rose-400' : remaining === 1 ? 'text-orange-500' : 'text-rose-500'}`}>
             {counterText}
           </p>
         </div>
       )}
 
-      {/* Scrollable item list */}
+      {/* スクロール可能なアイテムリスト */}
       <div className="flex-1 overflow-y-auto px-4 space-y-2 pb-4">
         {items.length === 0 && (
           <EmptyState icon={<Plus size={40} />} title="Add items to your list"
             subtitle="Tap + to add from My Items" />
         )}
 
-        {/* Animating items: ポン！と縮んで消える */}
-        {leaving.map(item => (
-          <div key={item.id} className="animate-check-off overflow-hidden">
-            <ItemRow item={item} onToggle={handleToggle} onDeleteRequest={setPendingDeleteId} />
-          </div>
-        ))}
+        <AnimatePresence mode="popLayout">
+          {/* アニメーション中のアイテム（斬るエフェクト） */}
+          {leaving.map(item => (
+            <ItemRow key={item.id} item={item} isLeaving
+              onToggle={handleToggle} onDeleteRequest={setPendingDeleteId} />
+          ))}
 
-        {/* Unchecked items */}
-        {unchecked.map(item => (
-          <ItemRow key={item.id} item={item}
-            onToggle={handleToggle} onDeleteRequest={setPendingDeleteId} />
-        ))}
+          {/* 未チェックアイテム */}
+          {unchecked.map(item => (
+            <ItemRow key={item.id} item={item}
+              onToggle={handleToggle} onDeleteRequest={setPendingDeleteId} />
+          ))}
+        </AnimatePresence>
 
-        {/* In Cart section */}
+        {/* カート内 */}
         {inCart.length > 0 && (
           <div className="mt-3 space-y-2">
             <p className="text-xs font-semibold text-rose-300 uppercase tracking-wide">
@@ -191,9 +193,8 @@ export function TodayScreen({ masterItems }: Props) {
         )}
       </div>
 
-      {/* Total bar + FAB — FAB is positioned above TotalBar, never overlaps */}
+      {/* Total bar + FAB */}
       <div className="px-4 pb-2 shrink-0 relative">
-        {/* FAB sits 8px above the TotalBar */}
         <button onClick={() => setPickerOpen(true)}
           className="absolute -top-16 right-0 w-14 h-14 bg-rose-400 hover:bg-rose-500 text-white rounded-full shadow-lg flex items-center justify-center transition-all active:scale-90 z-10"
           aria-label="Add items">
@@ -202,7 +203,7 @@ export function TodayScreen({ masterItems }: Props) {
         <TotalBar items={items} />
       </div>
 
-      {/* Delete confirmation dialog */}
+      {/* 削除確認ダイアログ */}
       {pendingDeleteId && (
         <div className="fixed inset-0 z-50 flex items-center justify-center px-8">
           <div className="absolute inset-0 bg-black/30" onClick={() => setPendingDeleteId(null)} />
@@ -223,7 +224,7 @@ export function TodayScreen({ masterItems }: Props) {
         </div>
       )}
 
-      {/* Save as Past List — bottom sheet */}
+      {/* テンプレートとして保存 — ボトムシート */}
       {showSaveSheet && (
         <div className="fixed inset-0 z-50 flex items-end">
           <div className="absolute inset-0 bg-black/30" onClick={() => setShowSaveSheet(false)} />
