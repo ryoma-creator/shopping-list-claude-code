@@ -1,28 +1,22 @@
 'use client'
-// Add / Edit item modal for My Items（写真アップロード対応）
+// Add / Edit item modal（カテゴリグリッド・Price修正・Qty ステッパー・写真対応）
 import { useState, useEffect, useRef } from 'react'
-import { X, Camera } from 'lucide-react'
+import { X, Camera, Minus, Plus } from 'lucide-react'
 import { supabase } from '@/lib/supabase/client'
 import type { Category, MasterItem } from '@/types/database'
 
-const CATEGORIES: { value: Category; label: string }[] = [
-  { value: 'meat',       label: '🥩 Meat' },
-  { value: 'fish',       label: '🐟 Fish' },
-  { value: 'dairy',      label: '🥛 Dairy' },
-  { value: 'fruits',     label: '🍎 Fruits' },
-  { value: 'vegetables', label: '🥦 Vegetables' },
-  { value: 'frozen',     label: '🧊 Frozen' },
-  { value: 'bakery',     label: '🍞 Bakery' },
-  { value: 'drinks',     label: '🥤 Drinks' },
-  { value: 'snacks',     label: '🍿 Snacks' },
-  { value: 'other',      label: 'Other' },
+const CATEGORIES: { value: Category; emoji: string; label: string }[] = [
+  { value: 'meat',       emoji: '🥩', label: 'Meat' },
+  { value: 'fish',       emoji: '🐟', label: 'Fish' },
+  { value: 'dairy',      emoji: '🥛', label: 'Dairy' },
+  { value: 'fruits',     emoji: '🍎', label: 'Fruits' },
+  { value: 'vegetables', emoji: '🥦', label: 'Veggies' },
+  { value: 'frozen',     emoji: '🧊', label: 'Frozen' },
+  { value: 'bakery',     emoji: '🍞', label: 'Bakery' },
+  { value: 'drinks',     emoji: '🥤', label: 'Drinks' },
+  { value: 'snacks',     emoji: '🍿', label: 'Snacks' },
+  { value: 'other',      emoji: '📦', label: 'Other' },
 ]
-
-const CATEGORY_EMOJI: Record<string, string> = {
-  meat: '🥩', fish: '🐟', dairy: '🥛', fruits: '🍎',
-  vegetables: '🥦', frozen: '🧊', bakery: '🍞', drinks: '🥤',
-  snacks: '🍿', other: '📦',
-}
 
 interface Props {
   item?: MasterItem
@@ -34,7 +28,7 @@ interface Props {
 export function MasterItemModal({ item, isOpen, onClose, onSave }: Props) {
   const [name, setName] = useState('')
   const [category, setCategory] = useState<Category>('other')
-  const [price, setPrice] = useState(0)
+  const [priceStr, setPriceStr] = useState('')
   const [qty, setQty] = useState(1)
   const [imageUrl, setImageUrl] = useState<string | null>(null)
   const [uploading, setUploading] = useState(false)
@@ -46,17 +40,20 @@ export function MasterItemModal({ item, isOpen, onClose, onSave }: Props) {
     if (item) {
       setName(item.name)
       setCategory(item.category)
-      setPrice(item.default_price)
+      setPriceStr(item.default_price > 0 ? String(item.default_price) : '')
       setQty(item.default_qty)
       setImageUrl(item.image_url ?? null)
     } else {
       setName('')
       setCategory('other')
-      setPrice(0)
+      setPriceStr('')
       setQty(1)
       setImageUrl(null)
     }
   }, [item, isOpen])
+
+  // Price を数値に変換（空文字は 0）
+  const priceNum = priceStr === '' ? 0 : Number(priceStr)
 
   // 写真アップロード
   const handleImageUpload = async (e: React.ChangeEvent<HTMLInputElement>) => {
@@ -95,12 +92,12 @@ export function MasterItemModal({ item, isOpen, onClose, onSave }: Props) {
       if (item) {
         await supabase
           .from('sl_master_items')
-          .update({ name, category, default_price: price, default_qty: qty, image_url: imageUrl })
+          .update({ name, category, default_price: priceNum, default_qty: qty, image_url: imageUrl })
           .eq('id', item.id)
       } else {
         await supabase
           .from('sl_master_items')
-          .insert({ name, category, default_price: price, default_qty: qty, image_url: imageUrl })
+          .insert({ name, category, default_price: priceNum, default_qty: qty, image_url: imageUrl })
       }
       onSave()
       onClose()
@@ -115,8 +112,9 @@ export function MasterItemModal({ item, isOpen, onClose, onSave }: Props) {
     <div className="fixed inset-0 z-50 flex items-end">
       {/* Overlay */}
       <div className="absolute inset-0 bg-black/30" onClick={onClose} />
-      {/* Modal */}
-      <div className="relative w-full max-w-[430px] mx-auto bg-white rounded-t-3xl p-6 space-y-4">
+      {/* Modal — pb-20 でナビバーに隠れないようにする */}
+      <div className="relative w-full max-w-[430px] mx-auto bg-white rounded-t-3xl p-5 pb-24 space-y-4 max-h-[90vh] overflow-y-auto">
+        {/* Header */}
         <div className="flex items-center justify-between">
           <h2 className="text-lg font-bold text-rose-800">
             {item ? 'Edit Item' : 'Add Item'}
@@ -126,12 +124,12 @@ export function MasterItemModal({ item, isOpen, onClose, onSave }: Props) {
           </button>
         </div>
 
-        {/* 写真アップロード */}
-        <div className="flex items-center gap-4">
+        {/* 写真アップロード + プレビュー */}
+        <div className="flex items-center gap-3">
           <button
             onClick={() => fileInputRef.current?.click()}
             disabled={uploading}
-            className="w-20 h-20 rounded-2xl border-2 border-dashed border-rose-200 flex flex-col items-center justify-center gap-1 hover:border-rose-400 hover:bg-rose-50 transition-colors overflow-hidden flex-shrink-0"
+            className="w-16 h-16 rounded-2xl border-2 border-dashed border-rose-200 flex flex-col items-center justify-center gap-0.5 hover:border-rose-400 hover:bg-rose-50 transition-colors overflow-hidden flex-shrink-0"
           >
             {imageUrl ? (
               // eslint-disable-next-line @next/next/no-img-element
@@ -140,8 +138,8 @@ export function MasterItemModal({ item, isOpen, onClose, onSave }: Props) {
               <span className="text-xs text-rose-400">...</span>
             ) : (
               <>
-                <Camera size={20} className="text-rose-300" />
-                <span className="text-[10px] text-rose-300 font-medium">Add Photo</span>
+                <Camera size={18} className="text-rose-300" />
+                <span className="text-[9px] text-rose-300 font-medium">Photo</span>
               </>
             )}
           </button>
@@ -153,71 +151,96 @@ export function MasterItemModal({ item, isOpen, onClose, onSave }: Props) {
             onChange={handleImageUpload}
             className="hidden"
           />
-
-          {/* カテゴリ絵文字プレビュー */}
-          {!imageUrl && (
-            <div className="w-20 h-20 bg-rose-50 rounded-2xl flex items-center justify-center text-4xl flex-shrink-0">
-              {CATEGORY_EMOJI[category] ?? '📦'}
-            </div>
-          )}
-
-          <p className="text-xs text-rose-400 flex-1">
-            {imageUrl ? 'Tap photo to change' : 'Take a photo or pick from gallery'}
+          <p className="text-xs text-rose-400">
+            {imageUrl ? 'Tap to change photo' : 'Optional: add a photo'}
           </p>
         </div>
 
-        <div className="space-y-3">
-          <div>
-            <label className="text-xs text-rose-400 mb-1 block">Item name</label>
+        {/* Item name */}
+        <div>
+          <label className="text-xs text-rose-400 mb-1 block">Item name</label>
+          <input
+            type="text"
+            placeholder="e.g. Milk"
+            value={name}
+            onChange={(e) => setName(e.target.value)}
+            className="w-full border border-rose-200 rounded-xl px-4 py-2.5 text-sm text-rose-900 placeholder-rose-300 focus:outline-none focus:ring-2 focus:ring-rose-300"
+          />
+        </div>
+
+        {/* カテゴリ — 絵文字グリッドボタン */}
+        <div>
+          <label className="text-xs text-rose-400 mb-2 block">Category</label>
+          <div className="grid grid-cols-5 gap-2">
+            {CATEGORIES.map((c) => (
+              <button
+                key={c.value}
+                type="button"
+                onClick={() => setCategory(c.value)}
+                className={`flex flex-col items-center gap-0.5 py-2 rounded-xl transition-all active:scale-95
+                  ${category === c.value
+                    ? 'bg-rose-400 text-white shadow-md ring-2 ring-rose-300'
+                    : 'bg-rose-50 text-rose-600 hover:bg-rose-100'
+                  }`}
+              >
+                <span className="text-xl leading-none">{c.emoji}</span>
+                <span className="text-[10px] font-medium leading-tight">{c.label}</span>
+              </button>
+            ))}
+          </div>
+        </div>
+
+        {/* Price & Quantity */}
+        <div className="flex gap-3">
+          {/* Price — テキスト入力（0問題を解消） */}
+          <div className="flex-1">
+            <label className="text-xs text-rose-400 mb-1 block">Price (¥)</label>
             <input
               type="text"
-              placeholder="e.g. Milk"
-              value={name}
-              onChange={(e) => setName(e.target.value)}
+              inputMode="numeric"
+              placeholder="0"
+              value={priceStr}
+              onChange={(e) => {
+                // 数字のみ許可
+                const v = e.target.value.replace(/[^0-9]/g, '')
+                setPriceStr(v)
+              }}
               className="w-full border border-rose-200 rounded-xl px-4 py-2.5 text-sm text-rose-900 placeholder-rose-300 focus:outline-none focus:ring-2 focus:ring-rose-300"
             />
           </div>
-          <div>
-            <label className="text-xs text-rose-400 mb-1 block">Category</label>
-            <select
-              value={category}
-              onChange={(e) => setCategory(e.target.value as Category)}
-              className="w-full border border-rose-200 rounded-xl px-4 py-2.5 text-sm text-rose-900 focus:outline-none focus:ring-2 focus:ring-rose-300"
-            >
-              {CATEGORIES.map((c) => (
-                <option key={c.value} value={c.value}>{c.label}</option>
-              ))}
-            </select>
-          </div>
-          <div className="flex gap-3">
-            <div className="flex-1">
-              <label className="text-xs text-rose-400 mb-1 block">Price (¥)</label>
-              <input
-                type="number"
-                min={0}
-                value={price}
-                onChange={(e) => setPrice(Number(e.target.value))}
-                className="w-full border border-rose-200 rounded-xl px-4 py-2.5 text-sm text-rose-900 focus:outline-none focus:ring-2 focus:ring-rose-300"
-              />
-            </div>
-            <div className="flex-1">
-              <label className="text-xs text-rose-400 mb-1 block">Quantity</label>
-              <input
-                type="number"
-                min={1}
-                value={qty}
-                onChange={(e) => setQty(Number(e.target.value))}
-                className="w-full border border-rose-200 rounded-xl px-4 py-2.5 text-sm text-rose-900 focus:outline-none focus:ring-2 focus:ring-rose-300"
-              />
+
+          {/* Quantity — +/- ステッパー */}
+          <div className="flex-1">
+            <label className="text-xs text-rose-400 mb-1 block">Quantity</label>
+            <div className="flex items-center border border-rose-200 rounded-xl overflow-hidden">
+              <button
+                type="button"
+                onClick={() => setQty(q => Math.max(1, q - 1))}
+                className="w-10 h-[42px] flex items-center justify-center text-rose-400 hover:bg-rose-50 active:bg-rose-100 transition-colors"
+              >
+                <Minus size={16} />
+              </button>
+              <span className="flex-1 text-center text-sm font-semibold text-rose-900">
+                {qty}
+              </span>
+              <button
+                type="button"
+                onClick={() => setQty(q => q + 1)}
+                className="w-10 h-[42px] flex items-center justify-center text-rose-400 hover:bg-rose-50 active:bg-rose-100 transition-colors"
+              >
+                <Plus size={16} />
+              </button>
             </div>
           </div>
         </div>
+
+        {/* Save ボタン */}
         <button
           onClick={handleSave}
           disabled={loading || !name.trim()}
           className="w-full bg-rose-400 hover:bg-rose-500 disabled:opacity-50 text-white font-semibold rounded-2xl py-3 transition-colors"
         >
-          {loading ? 'Saving...' : 'Save'}
+          {loading ? 'Saving...' : 'Save ✨'}
         </button>
       </div>
     </div>

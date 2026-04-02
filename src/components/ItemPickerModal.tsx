@@ -38,7 +38,7 @@ export function ItemPickerModal({ listId, isOpen, onClose, masterItems, onAdded 
   const [justAdded, setJustAdded] = useState<Set<string>>(new Set())
   const [showCustom, setShowCustom] = useState(false)
   const [customName, setCustomName] = useState('')
-  const [customPrice, setCustomPrice] = useState(0)
+  const [customPriceStr, setCustomPriceStr] = useState('')
   const [customQty, setCustomQty] = useState(1)
   const [addingCustom, setAddingCustom] = useState(false)
 
@@ -61,11 +61,12 @@ export function ItemPickerModal({ listId, isOpen, onClose, masterItems, onAdded 
     if (!customName.trim()) return
     setAddingCustom(true)
     try {
+      const customPrice = customPriceStr === '' ? 0 : Number(customPriceStr)
       await supabase.from('sl_list_items').insert({
         list_id: listId, master_item_id: null, name: customName.trim(),
         price: customPrice, qty: customQty, is_checked: false, sort_order: masterItems.length,
       })
-      setCustomName(''); setCustomPrice(0); setCustomQty(1)
+      setCustomName(''); setCustomPriceStr(''); setCustomQty(1)
       onAdded?.(); setShowCustom(false)
     } finally { setAddingCustom(false) }
   }
@@ -98,8 +99,8 @@ export function ItemPickerModal({ listId, isOpen, onClose, masterItems, onAdded 
             <div className="flex gap-2">
               <div className="flex-1">
                 <label className="text-xs text-rose-400 block mb-1">Price (¥)</label>
-                <input type="number" min={0} value={customPrice}
-                  onChange={e => setCustomPrice(Number(e.target.value))}
+                <input type="text" inputMode="numeric" placeholder="0" value={customPriceStr}
+                  onChange={e => setCustomPriceStr(e.target.value.replace(/[^0-9]/g, ''))}
                   className="w-full border border-rose-200 rounded-xl px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-rose-300" />
               </div>
               <div className="flex-1">

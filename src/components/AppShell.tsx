@@ -50,7 +50,7 @@ export function AppShell() {
           <TodayScreen masterItems={masterItems} />
         )}
         {activeTab === 'master' && (
-          <MasterScreen onMasterItemsChange={(items) => setMasterItems(items)} />
+          <MasterScreen onMasterItemsChange={setMasterItems} />
         )}
         {activeTab === 'templates' && (
           <TemplatesScreen onUseTemplate={() => setActiveTab('today')} />
