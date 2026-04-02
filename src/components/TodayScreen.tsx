@@ -190,16 +190,16 @@ export function TodayScreen({ masterItems }: Props) {
         )}
       </div>
 
-      {/* Total bar */}
-      <div className="px-4 pb-2 shrink-0"><TotalBar items={items} /></div>
-
-      {/* FAB */}
-      <button onClick={() => setPickerOpen(true)}
-        className="fixed bottom-24 w-14 h-14 bg-rose-400 hover:bg-rose-500 text-white rounded-full shadow-lg flex items-center justify-center transition-all active:scale-90 z-20"
-        style={{ right: 'max(1rem, calc((100vw - 430px) / 2 + 1rem))' }}
-        aria-label="Add items">
-        <Plus size={24} />
-      </button>
+      {/* Total bar + FAB — FAB is positioned above TotalBar, never overlaps */}
+      <div className="px-4 pb-2 shrink-0 relative">
+        {/* FAB sits 8px above the TotalBar */}
+        <button onClick={() => setPickerOpen(true)}
+          className="absolute -top-16 right-0 w-14 h-14 bg-rose-400 hover:bg-rose-500 text-white rounded-full shadow-lg flex items-center justify-center transition-all active:scale-90 z-10"
+          aria-label="Add items">
+          <Plus size={24} />
+        </button>
+        <TotalBar items={items} />
+      </div>
 
       {/* Delete confirmation dialog */}
       {pendingDeleteId && (
