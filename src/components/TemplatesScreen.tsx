@@ -1,5 +1,5 @@
 'use client'
-// テンプレート画面
+// Past Lists screen — saved shopping lists for reuse
 import { useState, useEffect, useCallback } from 'react'
 import { LayoutList, ShoppingCart, Trash2 } from 'lucide-react'
 import { supabase } from '@/lib/supabase/client'
@@ -19,7 +19,7 @@ export function TemplatesScreen({ onUseTemplate }: Props) {
   const [templates, setTemplates] = useState<TemplateWithStats[]>([])
   const [loading, setLoading] = useState<string | null>(null)
 
-  // テンプレート一覧を取得
+  // Load all saved lists
   const loadTemplates = useCallback(async () => {
     const { data: lists } = await supabase
       .from('sl_shopping_lists')
@@ -29,7 +29,7 @@ export function TemplatesScreen({ onUseTemplate }: Props) {
 
     if (!lists) return
 
-    // 各テンプレートのアイテム数と合計を計算
+    // Calculate item count and total price for each list
     const withStats = await Promise.all(
       lists.map(async (list) => {
         const { data: items } = await supabase
@@ -45,12 +45,11 @@ export function TemplatesScreen({ onUseTemplate }: Props) {
     setTemplates(withStats)
   }, [])
 
-  // テンプレートから今日のリストを作成
+  // Load a past list into today's list
   const useTemplate = async (template: TemplateWithStats) => {
     setLoading(template.id)
     try {
-      const today = new Date().toLocaleDateString('ja-JP')
-      // 既存の今日のリストを確認
+      const today = new Date().toLocaleDateString('en-CA')
       const { data: existing } = await supabase
         .from('sl_shopping_lists')
         .select('id')
@@ -71,7 +70,7 @@ export function TemplatesScreen({ onUseTemplate }: Props) {
         listId = newList.id
       }
 
-      // テンプレートのアイテムをコピー
+      // Copy all items from the past list
       const { data: tmplItems } = await supabase
         .from('sl_list_items')
         .select('*')
@@ -97,7 +96,7 @@ export function TemplatesScreen({ onUseTemplate }: Props) {
     }
   }
 
-  // テンプレートを削除
+  // Delete a past list
   const deleteTemplate = async (id: string) => {
     await supabase.from('sl_shopping_lists').delete().eq('id', id)
     setTemplates((prev) => prev.filter((t) => t.id !== id))
@@ -109,19 +108,19 @@ export function TemplatesScreen({ onUseTemplate }: Props) {
 
   return (
     <div className="flex-1 flex flex-col pb-24">
-      {/* ヘッダー */}
+      {/* Header */}
       <div className="px-4 pt-6 pb-3">
-        <h1 className="text-xl font-bold text-rose-800">💾 テンプレート</h1>
-        <p className="text-xs text-rose-400 mt-1">前回の買い物リストを再利用できます</p>
+        <h1 className="text-xl font-bold text-rose-800">💾 Past Lists</h1>
+        <p className="text-xs text-rose-400 mt-1">Reuse a previous shopping list</p>
       </div>
 
-      {/* テンプレート一覧 */}
+      {/* List */}
       <div className="px-4 space-y-3">
         {templates.length === 0 && (
           <EmptyState
             icon={<LayoutList size={40} />}
-            title="テンプレートがありません"
-            subtitle="今日の買い物タブで「テンプレに保存」ボタンを押すと保存できます"
+            title="No saved lists yet"
+            subtitle={'Tap "Save as Past List" on Today\'s List to save one'}
           />
         )}
 
@@ -134,13 +133,13 @@ export function TemplatesScreen({ onUseTemplate }: Props) {
               <div>
                 <p className="font-semibold text-rose-800">{tmpl.name}</p>
                 <p className="text-xs text-rose-400 mt-0.5">
-                  {tmpl.itemCount}点 · 合計 ¥{tmpl.totalPrice.toLocaleString()}
+                  {tmpl.itemCount} items · Total ¥{tmpl.totalPrice.toLocaleString()}
                 </p>
               </div>
               <button
                 onClick={() => deleteTemplate(tmpl.id)}
                 className="p-1.5 text-rose-200 hover:text-rose-400 transition-colors"
-                aria-label="削除"
+                aria-label="Delete"
               >
                 <Trash2 size={15} />
               </button>
@@ -151,7 +150,7 @@ export function TemplatesScreen({ onUseTemplate }: Props) {
               className="w-full flex items-center justify-center gap-2 bg-rose-400 hover:bg-rose-500 disabled:opacity-50 text-white font-semibold rounded-xl py-2.5 text-sm transition-colors"
             >
               <ShoppingCart size={16} />
-              {loading === tmpl.id ? '読み込み中...' : 'これで買い物する'}
+              {loading === tmpl.id ? 'Loading...' : 'Use This List'}
             </button>
           </div>
         ))}

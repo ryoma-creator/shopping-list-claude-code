@@ -1,5 +1,5 @@
 'use client'
-// マスターリスト画面
+// My Items screen — register frequently bought items
 import { useState, useEffect, useCallback } from 'react'
 import { Plus, Pencil } from 'lucide-react'
 import { supabase } from '@/lib/supabase/client'
@@ -17,7 +17,7 @@ export function MasterScreen({ onMasterItemsChange }: Props) {
   const [modalOpen, setModalOpen] = useState(false)
   const [editItem, setEditItem] = useState<MasterItem | undefined>()
 
-  // マスターアイテム一覧を取得
+  // Load all master items
   const loadItems = useCallback(async () => {
     const { data } = await supabase
       .from('sl_master_items')
@@ -44,7 +44,7 @@ export function MasterScreen({ onMasterItemsChange }: Props) {
     setModalOpen(true)
   }
 
-  // カテゴリでグループ化
+  // Group by category
   const grouped = items.reduce<Record<string, MasterItem[]>>((acc, item) => {
     if (!acc[item.category]) acc[item.category] = []
     acc[item.category].push(item)
@@ -53,25 +53,25 @@ export function MasterScreen({ onMasterItemsChange }: Props) {
 
   return (
     <div className="flex-1 flex flex-col pb-24">
-      {/* ヘッダー */}
+      {/* Header */}
       <div className="px-4 pt-6 pb-3 flex items-center justify-between">
-        <h1 className="text-xl font-bold text-rose-800">📋 マスターリスト</h1>
+        <h1 className="text-xl font-bold text-rose-800">📋 My Items</h1>
         <button
           onClick={openAdd}
           className="flex items-center gap-1.5 bg-rose-400 hover:bg-rose-500 text-white text-sm font-semibold rounded-xl px-4 py-2 transition-colors"
         >
           <Plus size={16} />
-          追加
+          Add Item
         </button>
       </div>
 
-      {/* アイテム一覧 */}
+      {/* Item list */}
       <div className="px-4 space-y-5">
         {items.length === 0 && (
           <EmptyState
             icon={<Plus size={40} />}
-            title="まだ登録されていません"
-            subtitle="よく買う商品を登録しておくと、買い物リストに簡単に追加できます"
+            title="No items yet"
+            subtitle="Register items you buy regularly so you can quickly add them to your shopping list"
           />
         )}
 
@@ -87,13 +87,13 @@ export function MasterScreen({ onMasterItemsChange }: Props) {
                   <div>
                     <p className="text-sm font-medium text-rose-900">{item.name}</p>
                     <p className="text-xs text-rose-400">
-                      ¥{item.default_price.toLocaleString()} × {item.default_qty}個
+                      Price: ¥{item.default_price.toLocaleString()} · Qty: {item.default_qty}
                     </p>
                   </div>
                   <button
                     onClick={() => openEdit(item)}
                     className="p-2 text-rose-300 hover:text-rose-500 transition-colors"
-                    aria-label="編集"
+                    aria-label="Edit"
                   >
                     <Pencil size={15} />
                   </button>

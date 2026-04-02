@@ -6,9 +6,9 @@ import { cn } from '@/lib/utils'
 export type TabId = 'today' | 'master' | 'templates'
 
 const TABS: { id: TabId; icon: typeof ShoppingCart; label: string }[] = [
-  { id: 'today',     icon: ShoppingCart, label: '今日の買い物' },
-  { id: 'master',    icon: BookOpen,     label: 'マスター' },
-  { id: 'templates', icon: LayoutList,   label: 'テンプレート' },
+  { id: 'today',     icon: ShoppingCart, label: "Today's List" },
+  { id: 'master',    icon: BookOpen,     label: 'My Items' },
+  { id: 'templates', icon: LayoutList,   label: 'Past Lists' },
 ]
 
 interface Props {

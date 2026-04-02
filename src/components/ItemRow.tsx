@@ -1,5 +1,5 @@
 'use client'
-// 買い物リストアイテム行コンポーネント
+// Shopping list item row component
 import { Trash2 } from 'lucide-react'
 import { cn } from '@/lib/utils'
 import type { ListItem } from '@/types/database'
@@ -14,11 +14,11 @@ export function ItemRow({ item, onToggle, onDelete }: Props) {
   return (
     <div
       className={cn(
-        'flex items-center gap-3 px-4 py-3 bg-white rounded-2xl border border-rose-100 transition-opacity',
-        item.is_checked && 'opacity-50'
+        'flex items-center gap-3 px-4 py-3 bg-white rounded-2xl border border-rose-100 transition-all duration-200',
+        item.is_checked && 'opacity-40 scale-[0.98]'
       )}
     >
-      {/* チェックボタン */}
+      {/* Check button */}
       <button
         onClick={() => onToggle(item.id, !item.is_checked)}
         className={cn(
@@ -27,7 +27,7 @@ export function ItemRow({ item, onToggle, onDelete }: Props) {
             ? 'bg-rose-400 border-rose-400'
             : 'border-rose-300 hover:border-rose-400'
         )}
-        aria-label={item.is_checked ? 'チェックを外す' : 'チェックする'}
+        aria-label={item.is_checked ? 'Uncheck' : 'Check'}
       >
         {item.is_checked && (
           <svg className="w-3 h-3 text-white" fill="none" viewBox="0 0 24 24" stroke="currentColor">
@@ -36,26 +36,24 @@ export function ItemRow({ item, onToggle, onDelete }: Props) {
         )}
       </button>
 
-      {/* 商品情報 */}
+      {/* Item info */}
       <div className="flex-1 min-w-0">
-        <p className={cn('text-sm font-medium text-rose-900 truncate', item.is_checked && 'line-through text-rose-400')}>
-          {item.name}
-        </p>
+        <p className="text-sm font-medium text-rose-900 truncate">{item.name}</p>
         <p className="text-xs text-rose-400">
-          ¥{item.price.toLocaleString()} × {item.qty}個
+          Price: ¥{item.price.toLocaleString()} · Qty: {item.qty}
         </p>
       </div>
 
-      {/* 合計金額 */}
+      {/* Subtotal */}
       <span className="text-sm font-semibold text-rose-700 flex-shrink-0">
         ¥{(item.price * item.qty).toLocaleString()}
       </span>
 
-      {/* 削除ボタン */}
+      {/* Delete button */}
       <button
         onClick={() => onDelete(item.id)}
         className="p-1 text-rose-300 hover:text-rose-500 transition-colors flex-shrink-0"
-        aria-label="削除"
+        aria-label="Delete"
       >
         <Trash2 size={16} />
       </button>

@@ -21,15 +21,16 @@ export function AppShell() {
   }, [])
 
   return (
-    <div className="flex flex-col min-h-screen bg-rose-50">
-      {/* ハートデコレーション */}
+    // Full height layout: content fills space above fixed TabBar
+    <div className="flex flex-col bg-rose-50" style={{ height: '100dvh' }}>
+      {/* Heart decoration */}
       <div className="fixed top-0 left-0 right-0 max-w-[430px] mx-auto pointer-events-none z-0">
         <div className="absolute top-4 right-6 text-rose-200 text-2xl">♥</div>
         <div className="absolute top-12 left-4 text-rose-100 text-lg">♥</div>
       </div>
 
-      {/* メインコンテンツ */}
-      <main className="flex-1 flex flex-col relative z-10">
+      {/* Main content — flex-1, sits above TabBar (pb-16) */}
+      <main className="flex-1 flex flex-col relative z-10 overflow-hidden pb-16">
         {activeTab === 'today' && (
           <TodayScreen masterItems={masterItems} />
         )}
@@ -41,7 +42,7 @@ export function AppShell() {
         )}
       </main>
 
-      {/* ボトムナビ */}
+      {/* Bottom tab bar */}
       <TabBar activeTab={activeTab} onTabChange={setActiveTab} />
     </div>
   )
