@@ -33,7 +33,7 @@ export async function POST(req: NextRequest) {
           content: [
             {
               type: 'text',
-              text: `この画像から買い物アイテムを全て抽出してください。${languagePrompt}カテゴリは meat/fish/dairy/fruits/vegetables/frozen/bakery/drinks/snacks/other から選んでください。JSONの配列のみ返してください。例: [{"name":"牛乳","category":"dairy"},{"name":"卵","category":"dairy"}]`,
+              text: `この画像から買い物アイテムを全て抽出してください。${languagePrompt}カテゴリは meat/fish/dairy/fruits/vegetables/frozen/bakery/drinks/snacks/other から選んでください。価格が見える場合はpriceに数値で入れてください（見えない場合はnull）。JSONの配列のみ返してください。例: [{"name":"milk","category":"dairy","price":210},{"name":"egg","category":"dairy","price":null}]`,
             },
             {
               type: 'image_url',
@@ -58,9 +58,21 @@ export async function POST(req: NextRequest) {
 
   // JSON配列部分を抽出してパース
   const match = content.match(/\[[\s\S]*\]/)
-  const items: { name: string; category: string }[] = match
-    ? (JSON.parse(match[0]) as { name: string; category: string }[])
+  const rawItems: unknown[] = match
+    ? (JSON.parse(match[0]) as unknown[])
     : []
+  const items = rawItems
+    .map((raw) => {
+      if (!raw || typeof raw !== 'object') return null
+      const r = raw as { name?: unknown; category?: unknown; price?: unknown }
+      if (typeof r.name !== 'string' || typeof r.category !== 'string') return null
+      return {
+        name: r.name,
+        category: r.category,
+        price: typeof r.price === 'number' && Number.isFinite(r.price) ? Math.max(0, Math.round(r.price)) : null,
+      }
+    })
+    .filter((x): x is { name: string; category: string; price: number | null } => x !== null)
 
   return NextResponse.json({ items })
 }

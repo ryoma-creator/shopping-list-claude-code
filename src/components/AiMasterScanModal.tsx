@@ -1,8 +1,9 @@
 'use client'
-import { useState, useRef, useCallback } from 'react'
+import { useState, useRef, useCallback, useEffect } from 'react'
 import { X, Camera, Sparkles, Plus } from 'lucide-react'
 import { supabase } from '@/lib/supabase/client'
 import { prepareImageForAiScan } from '@/lib/aiScanImage'
+import { getInitialScanLanguage, saveScanLanguage, type ScanLanguage } from '@/lib/scanLanguage'
 import type { Category } from '@/types/database'
 
 const VALID_CATS: Category[] = ['meat','fish','dairy','fruits','vegetables','frozen','bakery','drinks','snacks','other']
@@ -10,8 +11,12 @@ const CAT_EMOJI: Record<string, string> = {
   meat:'🥩', fish:'🐟', dairy:'🥛', fruits:'🍎', vegetables:'🥦',
   frozen:'🧊', bakery:'🍞', drinks:'🥤', snacks:'🍿', other:'📦',
 }
+const CAT_LABEL: Record<string, string> = {
+  meat:'meat', fish:'fish', dairy:'dairy', fruits:'fruits', vegetables:'vegetables',
+  frozen:'frozen', bakery:'bakery', drinks:'drinks', snacks:'snacks', other:'other',
+}
 
-interface ScannedItem { name: string; category: Category }
+interface ScannedItem { name: string; category: Category; price: number | null }
 
 interface Props {
   isOpen: boolean
@@ -21,11 +26,9 @@ interface Props {
 }
 
 type Phase = 'select' | 'preview' | 'scanning' | 'results'
-type ScanLanguage = 'ja' | 'en' | 'it' | 'es' | 'fr' | 'ko'
-
 const LANGUAGE_OPTIONS: { value: ScanLanguage; label: string }[] = [
-  { value: 'ja', label: '日本語' },
   { value: 'en', label: 'English' },
+  { value: 'ja', label: '日本語' },
   { value: 'it', label: 'Italiano' },
   { value: 'es', label: 'Espanol' },
   { value: 'fr', label: 'Francais' },
@@ -41,8 +44,13 @@ export function AiMasterScanModal({ isOpen, onClose, userId, onAdded }: Props) {
   const [selected, setSelected] = useState<Set<number>>(new Set())
   const [adding, setAdding] = useState(false)
   const [error, setError] = useState<string | null>(null)
-  const [language, setLanguage] = useState<ScanLanguage>('ja')
+  const [language, setLanguage] = useState<ScanLanguage>('en')
   const fileRef = useRef<HTMLInputElement>(null)
+
+  useEffect(() => {
+    if (!isOpen) return
+    setLanguage(getInitialScanLanguage(userId))
+  }, [isOpen, userId])
 
   const handleFile = useCallback(async (file: File) => {
     setError(null)
@@ -68,23 +76,21 @@ export function AiMasterScanModal({ isOpen, onClose, userId, onAdded }: Props) {
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ imageBase64, mimeType, language }),
       })
-      const json = await res.json() as { items?: { name: string; category: string }[]; error?: string }
+      const json = await res.json() as { items?: { name: string; category: string; price?: number | null }[]; error?: string }
       if (!res.ok || json.error) throw new Error(json.error ?? 'スキャン失敗')
       const scanned: ScannedItem[] = (json.items ?? []).map(i => ({
         name: i.name,
         category: (VALID_CATS.includes(i.category as Category) ? i.category : 'other') as Category,
+        price: typeof i.price === 'number' ? i.price : null,
       }))
       setItems(scanned)
       setSelected(new Set(scanned.map((_, i) => i)))
+      saveScanLanguage(userId, language)
       setPhase('results')
     } catch (e) {
       setError(e instanceof Error ? e.message : 'エラーが発生しました')
       setPhase('preview')
     }
-  }
-
-  const updateCategory = (i: number, cat: Category) => {
-    setItems(prev => prev.map((item, idx) => idx === i ? { ...item, category: cat } : item))
   }
 
   const toggleSelect = (i: number) => {
@@ -97,7 +103,7 @@ export function AiMasterScanModal({ isOpen, onClose, userId, onAdded }: Props) {
     for (const item of toAdd) {
       await supabase.from('sl_master_items').insert({
         user_id: userId, name: item.name, category: item.category,
-        default_price: 0, default_qty: 1,
+        default_price: item.price ?? 0, default_qty: 1,
       })
     }
     setAdding(false)
@@ -114,7 +120,7 @@ export function AiMasterScanModal({ isOpen, onClose, userId, onAdded }: Props) {
   if (!isOpen) return null
 
   return (
-    <div className="fixed inset-0 z-50 flex flex-col">
+    <div className="fixed inset-0 z-[70] flex flex-col">
       <div className="absolute inset-0 bg-black/40" onClick={handleClose} />
       <div className="relative flex-1 flex flex-col mt-16 mx-auto w-full max-w-[430px] bg-white rounded-t-3xl overflow-hidden">
         {/* ヘッダー */}
@@ -184,7 +190,7 @@ export function AiMasterScanModal({ isOpen, onClose, userId, onAdded }: Props) {
           {/* 結果 */}
           {phase === 'results' && (
             <div className="space-y-3">
-              <p className="text-sm text-rose-500 font-medium">{items.length}件検出 — My Itemsに追加するものを選んでください</p>
+              <p className="text-sm text-rose-500 font-medium">{items.length}件検出 — 名前と自動カテゴリで追加されます</p>
               {items.map((item, i) => (
                 <div key={i} className={`rounded-2xl border transition-all ${selected.has(i) ? 'border-rose-300 bg-rose-50' : 'border-rose-100 opacity-50'}`}>
                   <div className="flex items-center gap-3 p-3">
@@ -194,16 +200,9 @@ export function AiMasterScanModal({ isOpen, onClose, userId, onAdded }: Props) {
                       {selected.has(i) && <span className="text-white text-xs font-black">✓</span>}
                     </button>
                     <p className="flex-1 text-sm font-semibold text-rose-800">{item.name}</p>
-                  </div>
-                  {/* カテゴリ選択 */}
-                  <div className="px-3 pb-3 flex flex-wrap gap-1.5">
-                    {VALID_CATS.map(cat => (
-                      <button key={cat} onClick={() => updateCategory(i, cat)}
-                        className={`text-xs px-2 py-1 rounded-full transition-colors
-                          ${item.category === cat ? 'bg-rose-400 text-white' : 'bg-white border border-rose-200 text-rose-500'}`}>
-                        {CAT_EMOJI[cat]} {cat}
-                      </button>
-                    ))}
+                    <span className="text-[11px] px-2 py-1 rounded-full bg-white border border-rose-200 text-rose-500 shrink-0">
+                      {CAT_EMOJI[item.category]} {CAT_LABEL[item.category]}
+                    </span>
                   </div>
                 </div>
               ))}
@@ -213,7 +212,7 @@ export function AiMasterScanModal({ isOpen, onClose, userId, onAdded }: Props) {
 
         {/* 追加ボタン */}
         {phase === 'results' && selected.size > 0 && (
-          <div className="px-5 pb-8 pt-3 shrink-0 border-t border-rose-50">
+          <div className="px-5 pb-24 pt-3 shrink-0 border-t border-rose-50">
             <button onClick={handleAdd} disabled={adding}
               className="w-full bg-gradient-to-r from-rose-400 to-pink-500 text-white font-semibold rounded-2xl py-3.5 disabled:opacity-60 flex items-center justify-center gap-2 shadow-lg shadow-rose-200/50">
               <Plus size={18} />

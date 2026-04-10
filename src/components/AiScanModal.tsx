@@ -1,13 +1,15 @@
 'use client'
-import { useState, useRef, useCallback } from 'react'
+import { useState, useRef, useCallback, useEffect } from 'react'
 import { X, Camera, Sparkles, Plus } from 'lucide-react'
 import { supabase } from '@/lib/supabase/client'
 import { offlineCache } from '@/lib/offlineCache'
 import { prepareImageForAiScan } from '@/lib/aiScanImage'
+import { getInitialScanLanguage, saveScanLanguage, type ScanLanguage } from '@/lib/scanLanguage'
 import type { MasterItem, ListItem } from '@/types/database'
 
 interface DetectedItem {
   name: string
+  price: number | null
   masterItem?: MasterItem
 }
 
@@ -17,6 +19,7 @@ interface Props {
   listId: string
   masterItems: MasterItem[]
   currentItemCount: number
+  userId: string
   onAdded: () => void
 }
 
@@ -30,18 +33,16 @@ function matchMaster(name: string, items: MasterItem[]): MasterItem | undefined 
 }
 
 type Phase = 'select' | 'preview' | 'scanning' | 'results'
-type ScanLanguage = 'ja' | 'en' | 'it' | 'es' | 'fr' | 'ko'
-
 const LANGUAGE_OPTIONS: { value: ScanLanguage; label: string }[] = [
-  { value: 'ja', label: '日本語' },
   { value: 'en', label: 'English' },
+  { value: 'ja', label: '日本語' },
   { value: 'it', label: 'Italiano' },
   { value: 'es', label: 'Espanol' },
   { value: 'fr', label: 'Francais' },
   { value: 'ko', label: 'Korean' },
 ]
 
-export function AiScanModal({ isOpen, onClose, listId, masterItems, currentItemCount, onAdded }: Props) {
+export function AiScanModal({ isOpen, onClose, listId, masterItems, currentItemCount, userId, onAdded }: Props) {
   const [phase, setPhase] = useState<Phase>('select')
   const [imagePreview, setImagePreview] = useState<string | null>(null)
   const [imageBase64, setImageBase64] = useState<string | null>(null)
@@ -50,8 +51,13 @@ export function AiScanModal({ isOpen, onClose, listId, masterItems, currentItemC
   const [selected, setSelected] = useState<Set<number>>(new Set())
   const [adding, setAdding] = useState(false)
   const [error, setError] = useState<string | null>(null)
-  const [language, setLanguage] = useState<ScanLanguage>('ja')
+  const [language, setLanguage] = useState<ScanLanguage>('en')
   const fileRef = useRef<HTMLInputElement>(null)
+
+  useEffect(() => {
+    if (!isOpen) return
+    setLanguage(getInitialScanLanguage(userId))
+  }, [isOpen, userId])
 
   const handleFile = useCallback(async (file: File) => {
     setError(null)
@@ -77,14 +83,16 @@ export function AiScanModal({ isOpen, onClose, listId, masterItems, currentItemC
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ imageBase64, mimeType, language }),
       })
-      const json = await res.json() as { items?: { name: string; category: string }[]; error?: string }
+      const json = await res.json() as { items?: { name: string; category: string; price?: number | null }[]; error?: string }
       if (!res.ok || json.error) throw new Error(json.error ?? 'スキャン失敗')
-      const items = (json.items ?? []).map(({ name }) => ({
+      const items = (json.items ?? []).map(({ name, price }) => ({
         name,
+        price: typeof price === 'number' ? price : null,
         masterItem: matchMaster(name, masterItems),
       }))
       setDetected(items)
       setSelected(new Set(items.map((_, i) => i)))
+      saveScanLanguage(userId, language)
       setPhase('results')
     } catch (e) {
       setError(e instanceof Error ? e.message : 'エラーが発生しました')
@@ -104,12 +112,12 @@ export function AiScanModal({ isOpen, onClose, listId, masterItems, currentItemC
     setAdding(true)
     const toAdd = detected.filter((_, i) => selected.has(i))
     for (let i = 0; i < toAdd.length; i++) {
-      const { name, masterItem } = toAdd[i]
+      const { name, price, masterItem } = toAdd[i]
       const row = {
         list_id: listId,
         master_item_id: masterItem?.id ?? null,
         name: masterItem?.name ?? name,
-        price: masterItem?.default_price ?? 0,
+        price: masterItem?.default_price ?? (price ?? 0),
         qty: masterItem?.default_qty ?? 1,
         is_checked: false,
         sort_order: currentItemCount + i,
@@ -142,7 +150,7 @@ export function AiScanModal({ isOpen, onClose, listId, masterItems, currentItemC
   if (!isOpen) return null
 
   return (
-    <div className="fixed inset-0 z-50 flex flex-col">
+    <div className="fixed inset-0 z-[70] flex flex-col">
       <div className="absolute inset-0 bg-black/40" onClick={handleClose} />
       <div className="relative flex-1 flex flex-col mt-16 mx-auto w-full max-w-[430px] bg-white rounded-t-3xl overflow-hidden">
         {/* ヘッダー */}
@@ -242,7 +250,7 @@ export function AiScanModal({ isOpen, onClose, listId, masterItems, currentItemC
 
         {/* 追加ボタン */}
         {phase === 'results' && selected.size > 0 && (
-          <div className="px-5 pb-8 pt-3 shrink-0 border-t border-rose-50">
+          <div className="px-5 pb-24 pt-3 shrink-0 border-t border-rose-50">
             <button onClick={handleAdd} disabled={adding}
               className="w-full bg-gradient-to-r from-rose-400 to-pink-500 text-white font-semibold rounded-2xl py-3.5 disabled:opacity-60 transition-colors flex items-center justify-center gap-2 shadow-lg shadow-rose-200/50">
               <Plus size={18} />

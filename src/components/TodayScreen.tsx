@@ -378,7 +378,7 @@ export function TodayScreen({ masterItems, userId }: Props) {
 
       <AiScanModal isOpen={scanOpen} onClose={() => setScanOpen(false)}
         listId={list.id} masterItems={masterItems}
-        currentItemCount={items.length}
+        currentItemCount={items.length} userId={userId}
         onAdded={() => loadItems(list.id)} />
 
       {showCelebration && <Celebration onDismiss={() => setShowCelebration(false)} />}

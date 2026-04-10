@@ -1,5 +1,5 @@
 'use client'
-import { useState, useRef } from 'react'
+import { useMemo, useRef, useState } from 'react'
 import { X } from 'lucide-react'
 import { supabase } from '@/lib/supabase/client'
 import { offlineCache } from '@/lib/offlineCache'
@@ -35,71 +35,113 @@ interface Props {
 
 export function ItemPickerModal({ listId, isOpen, onClose, masterItems, onAdded }: Props) {
   const [activeCat, setActiveCat] = useState('all')
-  const [addedCount, setAddedCount] = useState(0)
-  const [justAdded, setJustAdded] = useState<Set<string>>(new Set())
-  const countRef = useRef(0)
+  const [selectedQty, setSelectedQty] = useState<Record<string, number>>({})
+  const [adjustingItemId, setAdjustingItemId] = useState<string | null>(null)
+  const [saving, setSaving] = useState(false)
+  const longPressTimer = useRef<number | null>(null)
+  const longPressTriggered = useRef(false)
 
   const filtered = activeCat === 'all' ? masterItems
     : masterItems.filter(i => i.category === activeCat)
 
-  const addItem = async (item: MasterItem) => {
-    if (justAdded.has(item.id)) return
-    setJustAdded(prev => new Set([...prev, item.id]))
-    countRef.current += 1
-    setAddedCount(countRef.current)
+  const selectedItemCount = useMemo(
+    () => Object.values(selectedQty).filter(q => q > 0).length,
+    [selectedQty]
+  )
+  const selectedTotalQty = useMemo(
+    () => Object.values(selectedQty).reduce((sum, q) => sum + q, 0),
+    [selectedQty]
+  )
+  const adjustingItem = masterItems.find(i => i.id === adjustingItemId) ?? null
+  const adjustingQty = adjustingItem ? (selectedQty[adjustingItem.id] ?? 0) : 0
 
-    const row = {
-      list_id: listId, master_item_id: item.id, name: item.name,
-      price: item.default_price, qty: item.default_qty,
-      is_checked: false, sort_order: masterItems.length,
-    }
+  const addOne = (itemId: string) => {
+    setSelectedQty(prev => ({ ...prev, [itemId]: (prev[itemId] ?? 0) + 1 }))
+  }
 
-    if (!navigator.onLine) {
-      // Offline → save locally with temp id, queue for later sync
-      const tempId = `temp_${Date.now()}_${Math.random().toString(36).slice(2)}`
-      const localItem: ListItem = {
-        id: tempId,
-        list_id: listId,
-        master_item_id: item.id,
-        name: item.name,
-        price: item.default_price,
-        qty: item.default_qty,
-        is_checked: false,
-        sort_order: masterItems.length,
-        created_at: new Date().toISOString(),
+  const setQty = (itemId: string, qty: number) => {
+    setSelectedQty(prev => {
+      const next = { ...prev }
+      if (qty <= 0) delete next[itemId]
+      else next[itemId] = qty
+      return next
+    })
+  }
+
+  const startLongPress = (itemId: string) => {
+    longPressTriggered.current = false
+    if (longPressTimer.current) window.clearTimeout(longPressTimer.current)
+    longPressTimer.current = window.setTimeout(() => {
+      longPressTriggered.current = true
+      setAdjustingItemId(itemId)
+    }, 450)
+  }
+
+  const endLongPress = () => {
+    if (longPressTimer.current) window.clearTimeout(longPressTimer.current)
+    longPressTimer.current = null
+  }
+
+  const saveSelectedItems = async () => {
+    if (selectedItemCount === 0 || saving) return
+    setSaving(true)
+    try {
+      const { data: latest } = await supabase
+        .from('sl_list_items')
+        .select('sort_order')
+        .eq('list_id', listId)
+        .order('sort_order', { ascending: false })
+        .limit(1)
+      let sortBase = (latest?.[0]?.sort_order ?? -1) + 1
+      const toInsert: Omit<ListItem, 'id' | 'created_at'>[] = []
+      for (const item of masterItems) {
+        const q = selectedQty[item.id] ?? 0
+        if (q <= 0) continue
+        toInsert.push({
+          list_id: listId,
+          master_item_id: item.id,
+          name: item.name,
+          price: item.default_price,
+          qty: Math.max(1, q * Math.max(1, item.default_qty)),
+          is_checked: false,
+          sort_order: sortBase++,
+        })
       }
-      // Add to cached items
-      const cached = offlineCache.loadTodayItems<ListItem[]>() ?? []
-      cached.push(localItem)
-      offlineCache.saveTodayItems(cached)
-      // Queue the insert for when we're back online
-      offlineCache.addPendingOp({
-        id: tempId,
-        type: 'insert_list_item',
-        payload: row,
-        createdAt: Date.now(),
-      })
-      onAdded?.()
-      return
-    }
+      if (toInsert.length === 0) return
 
-    const { error } = await supabase.from('sl_list_items').insert(row)
-    if (error) {
-      console.error('Insert list item failed:', error.message)
-      setJustAdded(prev => { const s = new Set(prev); s.delete(item.id); return s })
-      countRef.current -= 1
-      setAddedCount(countRef.current)
-      alert(`Failed to add: ${error.message}`)
-      return
+      if (!navigator.onLine) {
+        const cached = offlineCache.loadTodayItems<ListItem[]>() ?? []
+        const now = Date.now()
+        toInsert.forEach((row, i) => {
+          const tempId = `temp_${now}_${i}`
+          cached.push({ ...row, id: tempId, created_at: new Date().toISOString() })
+          offlineCache.addPendingOp({
+            id: tempId,
+            type: 'insert_list_item',
+            payload: row,
+            createdAt: Date.now(),
+          })
+        })
+        offlineCache.saveTodayItems(cached)
+      } else {
+        const { error } = await supabase.from('sl_list_items').insert(toInsert)
+        if (error) throw error
+      }
+
+      onAdded?.()
+      handleClose()
+    } catch (e) {
+      const msg = e instanceof Error ? e.message : 'Failed to add selected items'
+      alert(msg)
+    } finally {
+      setSaving(false)
     }
-    onAdded?.()
   }
 
   const handleClose = () => {
-    // Reset counts when closing
-    countRef.current = 0
-    setAddedCount(0)
-    setJustAdded(new Set())
+    setSelectedQty({})
+    setAdjustingItemId(null)
+    endLongPress()
     onClose()
   }
 
@@ -115,9 +157,9 @@ export function ItemPickerModal({ listId, isOpen, onClose, masterItems, onAdded 
         <div className="flex items-center justify-between px-5 pt-4 pb-2 shrink-0">
           <div className="flex items-center gap-2">
             <h2 className="text-base font-bold text-rose-800">Pick Items</h2>
-            {addedCount > 0 && (
+            {selectedTotalQty > 0 && (
               <span className="bg-gradient-to-r from-rose-400 to-pink-500 text-white text-xs font-bold px-2.5 py-0.5 rounded-full shadow-sm animate-bounce-in">
-                {addedCount} added
+                {selectedTotalQty} selected
               </span>
             )}
           </div>
@@ -161,9 +203,22 @@ export function ItemPickerModal({ listId, isOpen, onClose, masterItems, onAdded 
             ) : (
               <div className="grid grid-cols-3 gap-2.5">
                 {filtered.map(item => {
-                  const added = justAdded.has(item.id)
+                  const qty = selectedQty[item.id] ?? 0
+                  const added = qty > 0
                   return (
-                    <button key={item.id} onClick={() => addItem(item)}
+                    <button key={item.id}
+                      onMouseDown={() => startLongPress(item.id)}
+                      onMouseUp={endLongPress}
+                      onMouseLeave={endLongPress}
+                      onTouchStart={() => startLongPress(item.id)}
+                      onTouchEnd={endLongPress}
+                      onClick={() => {
+                        if (longPressTriggered.current) {
+                          longPressTriggered.current = false
+                          return
+                        }
+                        addOne(item.id)
+                      }}
                       className={`flex flex-col items-center p-2.5 rounded-2xl transition-all active:scale-90 relative overflow-hidden
                         ${added
                           ? 'bg-gradient-to-br from-rose-400 to-pink-500 shadow-lg shadow-rose-200/50 scale-95'
@@ -186,8 +241,8 @@ export function ItemPickerModal({ listId, isOpen, onClose, masterItems, onAdded 
                       {/* Added overlay — checkmark */}
                       {added && (
                         <div className="absolute inset-0 flex items-center justify-center bg-rose-400/30 rounded-2xl">
-                          <div className="w-10 h-10 bg-white/90 rounded-full flex items-center justify-center">
-                            <span className="text-rose-500 font-black text-lg">✓</span>
+                          <div className="min-w-10 h-10 px-3 bg-white/90 rounded-full flex items-center justify-center">
+                            <span className="text-rose-500 font-black text-base">x{qty}</span>
                           </div>
                         </div>
                       )}
@@ -198,7 +253,36 @@ export function ItemPickerModal({ listId, isOpen, onClose, masterItems, onAdded 
             )}
           </div>
         </div>
+
+        {selectedItemCount > 0 && (
+          <div className="px-3 pb-6 pt-2 border-t border-rose-100 shrink-0">
+            <button onClick={saveSelectedItems} disabled={saving}
+              className="w-full bg-gradient-to-r from-rose-400 to-pink-500 text-white font-semibold rounded-2xl py-3 disabled:opacity-50">
+              {saving ? 'Adding...' : `${selectedItemCount} items / ${selectedTotalQty} qty を追加`}
+            </button>
+          </div>
+        )}
       </div>
+
+      {adjustingItem && (
+        <div className="fixed inset-0 z-[70] flex items-end">
+          <div className="absolute inset-0 bg-black/30" onClick={() => setAdjustingItemId(null)} />
+          <div className="relative w-full max-w-[430px] mx-auto bg-white rounded-t-3xl p-5 pb-8 space-y-4">
+            <p className="font-bold text-rose-800">数量を調整: {adjustingItem.name}</p>
+            <div className="flex items-center justify-center gap-4">
+              <button onClick={() => setQty(adjustingItem.id, adjustingQty - 1)}
+                className="w-12 h-12 rounded-xl border border-rose-200 text-rose-500 text-xl">-</button>
+              <div className="min-w-16 text-center text-2xl font-black text-rose-700">{adjustingQty}</div>
+              <button onClick={() => setQty(adjustingItem.id, adjustingQty + 1)}
+                className="w-12 h-12 rounded-xl border border-rose-200 text-rose-500 text-xl">+</button>
+            </div>
+            <button onClick={() => setAdjustingItemId(null)}
+              className="w-full border border-rose-200 text-rose-500 rounded-2xl py-2.5 text-sm font-semibold">
+              OK
+            </button>
+          </div>
+        </div>
+      )}
     </div>
   )
 }
