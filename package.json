@@ -6,7 +6,8 @@
     "dev": "next dev",
     "build": "next build",
     "start": "next start",
-    "lint": "eslint"
+    "lint": "eslint",
+    "migrate": "supabase db push --project-ref yxalxhjjhjwhateoyqpq"
   },
   "dependencies": {
     "@supabase/supabase-js": "^2.101.1",
@@ -17,6 +18,7 @@
     "framer-motion": "^12.38.0",
     "lucide-react": "^1.7.0",
     "next": "16.2.2",
+    "openai": "^6.34.0",
     "react": "19.2.4",
     "react-dom": "19.2.4",
     "tailwind-merge": "^3.5.0"

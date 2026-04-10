@@ -1,6 +1,6 @@
 'use client'
 import { useState, useEffect, useCallback } from 'react'
-import { LayoutList, ShoppingCart, Trash2 } from 'lucide-react'
+import { LayoutList, ShoppingCart, Trash2, AlertTriangle } from 'lucide-react'
 import { supabase } from '@/lib/supabase/client'
 import { EmptyState } from '@/components/EmptyState'
 import type { ShoppingList, ListItem, MasterItem } from '@/types/database'
@@ -18,12 +18,14 @@ interface TemplateWithItems extends ShoppingList {
 
 interface Props {
   onUseTemplate: () => void
+  userId: string
 }
 
-export function TemplatesScreen({ onUseTemplate }: Props) {
+export function TemplatesScreen({ onUseTemplate, userId }: Props) {
   const [templates, setTemplates] = useState<TemplateWithItems[]>([])
   const [masterMap, setMasterMap] = useState<Map<string, MasterItem>>(new Map())
   const [loading, setLoading] = useState<string | null>(null)
+  const [confirmTemplate, setConfirmTemplate] = useState<TemplateWithItems | null>(null)
 
   const loadMasterItems = useCallback(async () => {
     const { data } = await supabase.from('sl_master_items').select('*')
@@ -58,6 +60,7 @@ export function TemplatesScreen({ onUseTemplate }: Props) {
   }, [])
 
   const useTemplate = async (template: TemplateWithItems) => {
+    setConfirmTemplate(null)
     setLoading(template.id)
     try {
       const today = new Date().toLocaleDateString('en-CA')
@@ -71,10 +74,12 @@ export function TemplatesScreen({ onUseTemplate }: Props) {
       let listId: string
       if (existing && existing.length > 0) {
         listId = existing[0].id
+        // Delete all existing items first (overwrite, not merge)
+        await supabase.from('sl_list_items').delete().eq('list_id', listId)
       } else {
         const { data: newList } = await supabase
           .from('sl_shopping_lists')
-          .insert({ name: today, is_template: false })
+          .insert({ name: today, is_template: false, user_id: userId })
           .select()
           .single()
         if (!newList) return
@@ -171,7 +176,7 @@ export function TemplatesScreen({ onUseTemplate }: Props) {
             </div>
 
             <button
-              onClick={() => useTemplate(tmpl)}
+              onClick={() => setConfirmTemplate(tmpl)}
               disabled={loading === tmpl.id}
               className="w-full flex items-center justify-center gap-1.5 bg-gradient-to-r from-rose-400 to-pink-500 hover:from-rose-500 hover:to-pink-600 disabled:opacity-50 text-white font-semibold rounded-xl py-2.5 text-sm transition-all shadow-md shadow-rose-200/50 active:scale-[0.98]"
             >
@@ -181,6 +186,32 @@ export function TemplatesScreen({ onUseTemplate }: Props) {
           </div>
         ))}
       </div>
+
+      {/* Confirmation popup */}
+      {confirmTemplate && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center px-8">
+          <div className="absolute inset-0 bg-black/30" onClick={() => setConfirmTemplate(null)} />
+          <div className="relative bg-white rounded-3xl p-6 w-full max-w-[320px] text-center space-y-3 shadow-xl">
+            <div className="w-12 h-12 mx-auto bg-amber-100 rounded-2xl flex items-center justify-center">
+              <AlertTriangle size={24} className="text-amber-500" />
+            </div>
+            <p className="font-bold text-rose-800">Replace Today&apos;s List?</p>
+            <p className="text-sm text-rose-400">
+              This will <span className="font-semibold text-rose-500">overwrite</span> your current Today&apos;s List with this past list ({confirmTemplate.items.length} items).
+            </p>
+            <div className="flex gap-3 pt-1">
+              <button onClick={() => setConfirmTemplate(null)}
+                className="flex-1 border border-rose-200 text-rose-400 rounded-2xl py-2.5 text-sm font-medium hover:bg-rose-50 transition-colors">
+                Cancel
+              </button>
+              <button onClick={() => useTemplate(confirmTemplate)}
+                className="flex-1 bg-gradient-to-r from-rose-400 to-pink-500 text-white rounded-2xl py-2.5 text-sm font-semibold transition-colors">
+                Replace
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
     </div>
   )
 }

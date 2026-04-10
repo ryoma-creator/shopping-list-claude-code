@@ -1,4 +1,4 @@
-const CACHE_NAME = 'shopping-list-v3'
+const CACHE_NAME = 'shopping-list-v4'
 
 // Cache app shell on install
 self.addEventListener('install', (event) => {

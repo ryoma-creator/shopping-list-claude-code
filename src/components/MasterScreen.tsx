@@ -1,8 +1,9 @@
 'use client'
 import { useState, useEffect, useCallback } from 'react'
-import { Plus } from 'lucide-react'
+import { Plus, Camera } from 'lucide-react'
 import { supabase } from '@/lib/supabase/client'
 import { MasterItemModal } from '@/components/MasterItemModal'
+import { AiMasterScanModal } from '@/components/AiMasterScanModal'
 import type { Category, MasterItem } from '@/types/database'
 
 const CATEGORY_EMOJI: Record<Category | string, string> = {
@@ -19,11 +20,13 @@ const CATEGORY_LABEL: Record<Category | string, string> = {
 
 interface Props {
   onMasterItemsChange: (items: MasterItem[]) => void
+  userId: string
 }
 
-export function MasterScreen({ onMasterItemsChange }: Props) {
+export function MasterScreen({ onMasterItemsChange, userId }: Props) {
   const [items, setItems] = useState<MasterItem[]>([])
   const [modalOpen, setModalOpen] = useState(false)
+  const [scanOpen, setScanOpen] = useState(false)
   const [editItem, setEditItem] = useState<MasterItem | undefined>()
   const [pendingDeleteId, setPendingDeleteId] = useState<string | null>(null)
 
@@ -54,10 +57,17 @@ export function MasterScreen({ onMasterItemsChange }: Props) {
       {/* Header */}
       <div className="px-4 pt-5 pb-3 flex items-center justify-between shrink-0">
         <h1 className="text-lg font-bold text-rose-800">📋 My Items</h1>
-        <button onClick={() => { setEditItem(undefined); setModalOpen(true) }}
-          className="flex items-center gap-1.5 bg-gradient-to-r from-rose-400 to-pink-500 text-white text-sm font-semibold rounded-xl px-4 py-2 transition-all shadow-md shadow-rose-200/50 active:scale-95">
-          <Plus size={16} /> Add
-        </button>
+        <div className="flex items-center gap-2">
+          {/* AI スキャンボタン */}
+          <button onClick={() => setScanOpen(true)}
+            className="flex items-center gap-1.5 border border-rose-200 text-rose-400 text-sm font-semibold rounded-xl px-3 py-2 hover:border-rose-400 hover:text-rose-600 transition-all active:scale-95">
+            <Camera size={15} /> Scan
+          </button>
+          <button onClick={() => { setEditItem(undefined); setModalOpen(true) }}
+            className="flex items-center gap-1.5 bg-gradient-to-r from-rose-400 to-pink-500 text-white text-sm font-semibold rounded-xl px-4 py-2 transition-all shadow-md shadow-rose-200/50 active:scale-95">
+            <Plus size={16} /> Add
+          </button>
+        </div>
       </div>
 
       <div className="flex-1 overflow-y-auto px-4 pb-24 space-y-4">
@@ -127,7 +137,10 @@ export function MasterScreen({ onMasterItemsChange }: Props) {
         </div>
       )}
 
-      <MasterItemModal item={editItem} isOpen={modalOpen}
+      <AiMasterScanModal isOpen={scanOpen} onClose={() => setScanOpen(false)}
+        userId={userId} onAdded={loadItems} />
+
+      <MasterItemModal item={editItem} isOpen={modalOpen} userId={userId}
         onClose={() => setModalOpen(false)} onSave={loadItems}
         onDelete={async (id) => {
           setItems(prev => prev.filter(i => i.id !== id))

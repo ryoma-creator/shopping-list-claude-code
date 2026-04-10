@@ -24,6 +24,7 @@ export type Database = {
       sl_master_items: {
         Row: {
           id: string
+          user_id: string
           name: string
           category: Category
           default_price: number
@@ -33,6 +34,7 @@ export type Database = {
         }
         Insert: {
           id?: string
+          user_id: string
           name: string
           category: Category
           default_price?: number
@@ -54,6 +56,7 @@ export type Database = {
       sl_shopping_lists: {
         Row: {
           id: string
+          user_id: string
           name: string
           is_template: boolean
           created_at: string
@@ -61,6 +64,7 @@ export type Database = {
         }
         Insert: {
           id?: string
+          user_id: string
           name: string
           is_template?: boolean
           created_at?: string

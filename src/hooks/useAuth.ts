@@ -56,10 +56,17 @@ export function useAuth() {
     await supabase.auth.signOut()
   }, [])
 
+  const resetPassword = useCallback(async (email: string): Promise<AuthError | null> => {
+    const { error } = await supabase.auth.resetPasswordForEmail(email, {
+      redirectTo: typeof window !== 'undefined' ? `${window.location.origin}` : undefined,
+    })
+    return error
+  }, [])
+
   /** Get display name from user metadata, fallback to email prefix */
   const displayName = user?.user_metadata?.display_name
     || user?.email?.split('@')[0]
     || 'User'
 
-  return { user, loading, displayName, signUp, signIn, signOut }
+  return { user, loading, displayName, signUp, signIn, signOut, resetPassword }
 }

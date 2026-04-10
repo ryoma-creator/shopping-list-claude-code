@@ -12,7 +12,7 @@ import { LogOut, ShoppingCart, WifiOff, RefreshCw } from 'lucide-react'
 import type { MasterItem } from '@/types/database'
 
 export function AppShell() {
-  const { user, loading: authLoading, displayName, signIn, signUp, signOut } = useAuth()
+  const { user, loading: authLoading, displayName, signIn, signUp, signOut, resetPassword } = useAuth()
   const [activeTab, setActiveTab] = useState<TabId>('today')
   const [isOffline, setIsOffline] = useState(false)
   const [isSyncing, setIsSyncing] = useState(false)
@@ -134,7 +134,7 @@ export function AppShell() {
 
   // Not logged in
   if (!user) {
-    return <AuthScreen onSignIn={signIn} onSignUp={signUp} />
+    return <AuthScreen onSignIn={signIn} onSignUp={signUp} onResetPassword={resetPassword} />
   }
 
   return (
@@ -171,13 +171,13 @@ export function AppShell() {
 
       <main className="flex-1 flex flex-col relative overflow-hidden pb-16">
         {activeTab === 'today' && (
-          <TodayScreen masterItems={masterItems} />
+          <TodayScreen masterItems={masterItems} userId={user.id} />
         )}
         {activeTab === 'master' && (
-          <MasterScreen onMasterItemsChange={setMasterItems} />
+          <MasterScreen onMasterItemsChange={setMasterItems} userId={user.id} />
         )}
         {activeTab === 'templates' && (
-          <TemplatesScreen onUseTemplate={() => setActiveTab('today')} />
+          <TemplatesScreen onUseTemplate={() => setActiveTab('today')} userId={user.id} />
         )}
       </main>
 

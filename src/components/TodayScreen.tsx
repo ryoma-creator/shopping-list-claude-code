@@ -1,6 +1,6 @@
 'use client'
 import { useState, useEffect, useCallback, useRef, useMemo } from 'react'
-import { Plus, Save, X } from 'lucide-react'
+import { Plus, Save, X, Trash2, Camera } from 'lucide-react'
 import { AnimatePresence } from 'framer-motion'
 import { supabase } from '@/lib/supabase/client'
 import { offlineCache } from '@/lib/offlineCache'
@@ -8,12 +8,13 @@ import { ItemRow } from '@/components/ItemRow'
 import { TotalBar } from '@/components/TotalBar'
 import { EmptyState } from '@/components/EmptyState'
 import { ItemPickerModal } from '@/components/ItemPickerModal'
+import { AiScanModal } from '@/components/AiScanModal'
 import { Celebration } from '@/components/Celebration'
 import type { ListItem, MasterItem, ShoppingList } from '@/types/database'
 
-interface Props { masterItems: MasterItem[] }
+interface Props { masterItems: MasterItem[]; userId: string }
 
-export function TodayScreen({ masterItems }: Props) {
+export function TodayScreen({ masterItems, userId }: Props) {
   const [list, setList] = useState<ShoppingList | null>(() =>
     offlineCache.loadTodayList<ShoppingList>()
   )
@@ -22,7 +23,9 @@ export function TodayScreen({ masterItems }: Props) {
   )
   const [animatingIds, setAnimatingIds] = useState<Set<string>>(new Set())
   const [pendingDeleteId, setPendingDeleteId] = useState<string | null>(null)
+  const [showClearConfirm, setShowClearConfirm] = useState(false)
   const [pickerOpen, setPickerOpen] = useState(false)
+  const [scanOpen, setScanOpen] = useState(false)
   const [showSaveSheet, setShowSaveSheet] = useState(false)
   const [showCelebration, setShowCelebration] = useState(false)
   const [saving, setSaving] = useState(false)
@@ -78,7 +81,7 @@ export function TodayScreen({ masterItems }: Props) {
     }
     const today = new Date().toLocaleDateString('en-CA')
     const { data, error } = await supabase.from('sl_shopping_lists')
-      .insert({ name: today, is_template: false }).select().single()
+      .insert({ name: today, is_template: false, user_id: userId }).select().single()
     if (error) {
       console.error('createTodayList error:', error.message)
       alert(`Failed to create list: ${error.message}`)
@@ -124,13 +127,29 @@ export function TodayScreen({ masterItems }: Props) {
     if (error) console.warn('Delete sync failed (offline?):', error.message)
   }
 
+  const clearAllItems = async () => {
+    if (!list) return
+    setShowClearConfirm(false)
+    const oldItems = items
+    setItems([])
+    offlineCache.saveTodayItems([])
+    celebratedRef.current = false
+    // Delete all items for this list from DB
+    const { error } = await supabase.from('sl_list_items').delete().eq('list_id', list.id)
+    if (error) {
+      console.warn('Clear all sync failed (offline?):', error.message)
+      // Restore if online failure (offline items already cleared)
+      if (navigator.onLine) { setItems(oldItems); offlineCache.saveTodayItems(oldItems) }
+    }
+  }
+
   const saveAsPastList = async () => {
     if (!list) return
     setSaving(true)
     try {
       const name = `Shopping ${new Date().toLocaleDateString('en-CA')}`
       const { data: saved } = await supabase.from('sl_shopping_lists')
-        .insert({ name, is_template: true }).select().single()
+        .insert({ name, is_template: true, user_id: userId }).select().single()
       if (saved && items.length > 0) {
         await supabase.from('sl_list_items').insert(
           items.map((item, i) => ({
@@ -193,10 +212,18 @@ export function TodayScreen({ masterItems }: Props) {
       {/* Header */}
       <div className="px-4 pt-4 pb-1 flex items-center justify-between shrink-0">
         <h1 className="text-lg font-bold text-rose-800">🛒 Today&apos;s List</h1>
-        <button onClick={() => setShowSaveSheet(true)} disabled={items.length === 0}
-          className="flex items-center gap-1 text-xs text-rose-400 hover:text-rose-600 disabled:opacity-40 transition-colors">
-          <Save size={14} /> Save
-        </button>
+        <div className="flex items-center gap-3">
+          {items.length > 0 && (
+            <button onClick={() => setShowClearConfirm(true)}
+              className="flex items-center gap-1 text-xs text-rose-300 hover:text-rose-500 transition-colors">
+              <Trash2 size={13} /> Clear
+            </button>
+          )}
+          <button onClick={() => setShowSaveSheet(true)} disabled={items.length === 0}
+            className="flex items-center gap-1 text-xs text-rose-400 hover:text-rose-600 disabled:opacity-40 transition-colors">
+            <Save size={14} /> Save
+          </button>
+        </div>
       </div>
 
       {/* Remaining counter */}
@@ -265,6 +292,12 @@ export function TodayScreen({ masterItems }: Props) {
 
       {/* Bottom: Total bar + modern FAB */}
       <div className="px-3 pb-2 shrink-0 relative">
+        {/* AI スキャンボタン */}
+        <button onClick={() => setScanOpen(true)}
+          className="absolute -top-16 right-20 w-14 h-14 bg-white border-2 border-rose-200 hover:border-rose-400 text-rose-400 hover:text-rose-600 rounded-2xl shadow-md flex items-center justify-center transition-all active:scale-90 z-10"
+          aria-label="AI scan">
+          <Camera size={22} />
+        </button>
         {/* FAB — large, gradient, modern */}
         <button onClick={() => setPickerOpen(true)}
           className="absolute -top-16 right-2 w-14 h-14 bg-gradient-to-br from-rose-400 to-pink-500 hover:from-rose-500 hover:to-pink-600 text-white rounded-2xl shadow-xl shadow-rose-300/40 flex items-center justify-center transition-all active:scale-90 z-10"
@@ -295,6 +328,28 @@ export function TodayScreen({ masterItems }: Props) {
         </div>
       )}
 
+      {/* Clear all confirmation */}
+      {showClearConfirm && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center px-8">
+          <div className="absolute inset-0 bg-black/30" onClick={() => setShowClearConfirm(false)} />
+          <div className="relative bg-white rounded-3xl p-6 w-full max-w-[300px] text-center space-y-3 shadow-xl">
+            <p className="text-2xl">🗑️</p>
+            <p className="font-bold text-rose-800">Clear entire list?</p>
+            <p className="text-sm text-rose-400">All {items.length} items will be removed.</p>
+            <div className="flex gap-3">
+              <button onClick={() => setShowClearConfirm(false)}
+                className="flex-1 border border-rose-200 text-rose-400 rounded-2xl py-2.5 text-sm font-medium hover:bg-rose-50 transition-colors">
+                Cancel
+              </button>
+              <button onClick={clearAllItems}
+                className="flex-1 bg-red-500 text-white rounded-2xl py-2.5 text-sm font-semibold transition-colors">
+                Clear All
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
       {/* Save as past list sheet */}
       {showSaveSheet && (
         <div className="fixed inset-0 z-50 flex items-end">
@@ -319,6 +374,11 @@ export function TodayScreen({ masterItems }: Props) {
 
       <ItemPickerModal listId={list.id} isOpen={pickerOpen}
         onClose={() => setPickerOpen(false)} masterItems={masterItems}
+        onAdded={() => loadItems(list.id)} />
+
+      <AiScanModal isOpen={scanOpen} onClose={() => setScanOpen(false)}
+        listId={list.id} masterItems={masterItems}
+        currentItemCount={items.length}
         onAdded={() => loadItems(list.id)} />
 
       {showCelebration && <Celebration onDismiss={() => setShowCelebration(false)} />}

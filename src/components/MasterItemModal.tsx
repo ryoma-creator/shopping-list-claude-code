@@ -23,9 +23,10 @@ interface Props {
   onClose: () => void
   onSave: () => void
   onDelete?: (id: string) => void
+  userId: string
 }
 
-export function MasterItemModal({ item, isOpen, onClose, onSave, onDelete }: Props) {
+export function MasterItemModal({ item, isOpen, onClose, onSave, onDelete, userId }: Props) {
   const [name, setName] = useState('')
   const [category, setCategory] = useState<Category>('other')
   const [priceStr, setPriceStr] = useState('')
@@ -91,26 +92,16 @@ export function MasterItemModal({ item, isOpen, onClose, onSave, onDelete }: Pro
     setLoading(true)
     setError(null)
     try {
-      // Base payload (always works even without image_url column)
-      const base = { name: name.trim(), category, default_price: priceNum, default_qty: qty }
-      // Only include image_url if user uploaded a photo
+      // ベースのペイロード（user_idを含む）
+      const base = { name: name.trim(), category, default_price: priceNum, default_qty: qty, user_id: userId }
+      // 写真がある場合はimage_urlも含める
       const payload = imageUrl ? { ...base, image_url: imageUrl } : base
 
       if (item) {
-        // Try with image_url first, fallback without it
-        let { error: err } = await supabase.from('sl_master_items').update(payload).eq('id', item.id)
-        if (err && imageUrl) {
-          // image_url column might not exist yet — retry without it
-          const result = await supabase.from('sl_master_items').update(base).eq('id', item.id)
-          err = result.error
-        }
+        const { error: err } = await supabase.from('sl_master_items').update(payload).eq('id', item.id)
         if (err) { setError(`Save failed: ${err.message}`); return }
       } else {
-        let { error: err } = await supabase.from('sl_master_items').insert(payload)
-        if (err && imageUrl) {
-          const result = await supabase.from('sl_master_items').insert(base)
-          err = result.error
-        }
+        const { error: err } = await supabase.from('sl_master_items').insert(payload)
         if (err) { setError(`Save failed: ${err.message}`); return }
       }
       onSave()

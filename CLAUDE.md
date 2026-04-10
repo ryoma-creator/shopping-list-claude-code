@@ -34,6 +34,19 @@
 - 計画が承認されてから実装を開始する
 - 実装後はビルドが通ることを確認する
 
+## Database Rules
+
+- DBのスキーマ変更（カラム追加・RLS設定など）は必ずマイグレーションファイルで管理する
+- ファイルの場所: `supabase/migrations/YYYYMMDD_NNN_説明.sql`
+- SQLをSupabase SQL Editorに貼り付けるのは禁止。必ずマイグレーションファイルを作成する
+- マイグレーションファイルを作成したらユーザーに以下を実行してもらう：
+
+```
+npm run migrate
+```
+
+- マイグレーションは冪等に書く（何度実行しても安全なように `IF NOT EXISTS` / `DROP IF EXISTS` を使う）
+
 ## File Structure
 
 src/
