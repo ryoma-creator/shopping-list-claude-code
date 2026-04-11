@@ -120,7 +120,7 @@ export function MasterScreen({ onMasterItemsChange, userId, deleteConfirmEnabled
     exitSelectMode()
     setItems(prev => prev.filter(i => !ids.includes(i.id)))
     const { error } = await supabase.from('sl_master_items').delete().in('id', ids)
-    if (error) { alert(`削除に失敗しました: ${error.message}`); await loadItems(); return }
+    if (error) { alert(`Delete failed: ${error.message}`); await loadItems(); return }
     onMasterItemsChange(items.filter(i => !ids.includes(i.id)))
   }
 
@@ -133,7 +133,7 @@ export function MasterScreen({ onMasterItemsChange, userId, deleteConfirmEnabled
           {selectMode ? (
             <button onClick={exitSelectMode}
               className="border border-rose-200 text-rose-400 text-sm font-semibold rounded-xl px-3 py-2 active:scale-95 transition-all">
-              キャンセル
+              Cancel
             </button>
           ) : (
             <>
@@ -143,7 +143,7 @@ export function MasterScreen({ onMasterItemsChange, userId, deleteConfirmEnabled
               </button>
               <button onClick={() => setSelectMode(true)}
                 className="border border-rose-200 text-rose-400 text-sm font-semibold rounded-xl px-3 py-2 hover:border-rose-400 hover:text-rose-600 transition-all active:scale-95">
-                選択
+                Select
               </button>
               <button onClick={() => { setEditItem(undefined); setModalOpen(true) }}
                 className="flex items-center gap-1.5 bg-gradient-to-r from-rose-400 to-pink-500 text-white text-sm font-semibold rounded-xl px-4 py-2 transition-all shadow-md shadow-rose-200/50 active:scale-95">
@@ -233,7 +233,7 @@ export function MasterScreen({ onMasterItemsChange, userId, deleteConfirmEnabled
             onClick={() => { if (selectedIds.size > 0) setShowBulkConfirm(true) }}
             disabled={selectedIds.size === 0}
             className="w-full bg-gradient-to-r from-red-400 to-rose-500 disabled:from-rose-200 disabled:to-pink-200 text-white font-bold rounded-2xl py-3.5 transition-all shadow-lg shadow-rose-200/50 disabled:shadow-none">
-            {selectedIds.size === 0 ? 'アイテムを選択してください' : `${selectedIds.size}件を削除する`}
+            {selectedIds.size === 0 ? 'Select items to delete' : `Delete ${selectedIds.size} item${selectedIds.size > 1 ? 's' : ''}`}
           </button>
         </div>
       )}
@@ -264,7 +264,7 @@ export function MasterScreen({ onMasterItemsChange, userId, deleteConfirmEnabled
               <input type="checkbox" checked={skipDeleteConfirmChecked}
                 onChange={(e) => setSkipDeleteConfirmChecked(e.target.checked)}
                 className="w-4 h-4 accent-rose-500" />
-              次回から確認を表示しない
+              Don't ask again
             </label>
           </div>
         </div>
@@ -276,16 +276,16 @@ export function MasterScreen({ onMasterItemsChange, userId, deleteConfirmEnabled
           <div className="absolute inset-0 bg-black/40" onClick={() => setShowBulkConfirm(false)} />
           <div className="relative bg-white rounded-3xl p-6 w-full max-w-[300px] text-center space-y-3 shadow-xl">
             <p className="text-2xl">🗑️</p>
-            <p className="font-bold text-rose-800">{selectedIds.size}件を削除しますか？</p>
-            <p className="text-sm text-red-400">選択したアイテムに紐づくリストのデータも全て消えます。</p>
+            <p className="font-bold text-rose-800">Delete {selectedIds.size} item{selectedIds.size > 1 ? 's' : ''}?</p>
+            <p className="text-sm text-red-400">All list data for selected items will also be deleted.</p>
             <div className="flex gap-3 pt-1">
               <button onClick={() => setShowBulkConfirm(false)}
                 className="flex-1 border border-rose-200 text-rose-400 rounded-2xl py-2.5 text-sm font-medium hover:bg-rose-50 transition-colors">
-                キャンセル
+                Cancel
               </button>
               <button onClick={() => void bulkDelete()}
                 className="flex-1 bg-gradient-to-r from-red-400 to-rose-500 text-white rounded-2xl py-2.5 text-sm font-semibold">
-                削除する
+                Delete
               </button>
             </div>
           </div>

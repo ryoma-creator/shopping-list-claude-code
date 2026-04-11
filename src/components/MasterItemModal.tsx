@@ -80,7 +80,7 @@ export function MasterItemModal({ item, isOpen, onClose, onSave, onDelete, userI
         .upload(filePath, file, { cacheControl: '3600', upsert: false })
 
       if (uploadError) {
-        setError(`画像のアップロードに失敗しました: ${uploadError.message}`)
+        setError(`Photo upload failed: ${uploadError.message}`)
         return
       }
 
@@ -173,7 +173,7 @@ export function MasterItemModal({ item, isOpen, onClose, onSave, onDelete, userI
             <button onClick={() => setPickerOpen(true)}
               className="flex items-center gap-1 text-xs text-rose-500 font-semibold hover:text-rose-700 transition-colors">
               <Images size={13} />
-              デフォルト画像から選ぶ
+              Choose default image
             </button>
           </div>
         </div>
@@ -282,7 +282,7 @@ export function MasterItemModal({ item, isOpen, onClose, onSave, onDelete, userI
               <input type="checkbox" checked={skipDeleteConfirmChecked}
                 onChange={(e) => setSkipDeleteConfirmChecked(e.target.checked)}
                 className="w-4 h-4 accent-rose-500" />
-              次回から確認を表示しない
+              Don't ask again
             </label>
           </div>
         )}

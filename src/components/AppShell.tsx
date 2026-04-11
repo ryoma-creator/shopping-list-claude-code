@@ -210,8 +210,8 @@ export function AppShell() {
             </div>
             <label className="flex items-center justify-between gap-3 p-3 rounded-2xl bg-rose-50 border border-rose-100">
               <div>
-                <p className="text-sm font-semibold text-rose-700">削除前の確認を表示</p>
-                <p className="text-xs text-rose-400">オフにすると削除はすぐ実行されます</p>
+                <p className="text-sm font-semibold text-rose-700">Confirm before delete</p>
+                <p className="text-xs text-rose-400">When off, items delete immediately</p>
               </div>
               <input
                 type="checkbox"

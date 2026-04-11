@@ -98,7 +98,7 @@ export function TemplatesScreen({ onUseTemplate, userId }: Props) {
             sort_order: i,
           }))
         )
-        if (insertErr) { alert(`テンプレートの読み込みに失敗しました: ${insertErr.message}`); return }
+        if (insertErr) { alert(`Failed to load template: ${insertErr.message}`); return }
       }
 
       onUseTemplate()
@@ -109,7 +109,7 @@ export function TemplatesScreen({ onUseTemplate, userId }: Props) {
 
   const deleteTemplate = async (id: string) => {
     const { error } = await supabase.from('sl_shopping_lists').delete().eq('id', id)
-    if (error) { alert(`削除に失敗しました: ${error.message}`); return }
+    if (error) { alert(`Delete failed: ${error.message}`); return }
     setTemplates((prev) => prev.filter((t) => t.id !== id))
   }
 

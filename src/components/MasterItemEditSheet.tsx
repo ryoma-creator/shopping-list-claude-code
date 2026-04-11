@@ -66,7 +66,7 @@ export function MasterItemEditSheet({ item, onClose, onSaved, onDeleted }: Props
       image_url: editImageUrl,
     }).eq('id', item.id)
     setSaving(false)
-    if (error) { alert(`保存に失敗しました: ${error.message}`); return }
+    if (error) { alert(`Save failed: ${error.message}`); return }
     onSaved()
     onClose()
   }
@@ -164,22 +164,22 @@ export function MasterItemEditSheet({ item, onClose, onSaved, onDeleted }: Props
             </button>
           ) : (
             <div className="bg-red-50 rounded-2xl p-4 space-y-3">
-              <p className="text-sm font-semibold text-red-600 text-center">「{item.name}」を削除しますか？</p>
-              <p className="text-xs text-red-400 text-center">このアイテムに紐づくリストのデータも全て消えます。</p>
+              <p className="text-sm font-semibold text-red-600 text-center">Delete "{item.name}"?</p>
+              <p className="text-xs text-red-400 text-center">All list data for this item will also be deleted.</p>
               <div className="flex gap-3">
                 <button onClick={() => setShowDeleteConfirm(false)}
                   className="flex-1 border border-rose-200 text-rose-400 rounded-xl py-2 text-sm font-medium">
-                  キャンセル
+                  Cancel
                 </button>
                 <button onClick={() => void execDelete()}
                   className="flex-1 bg-gradient-to-r from-red-400 to-rose-500 text-white rounded-xl py-2 text-sm font-semibold">
-                  削除する
+                  Delete
                 </button>
               </div>
               <label className="flex items-center justify-center gap-2 text-xs text-rose-500">
                 <input type="checkbox" checked={skipNextTime} onChange={e => setSkipNextTime(e.target.checked)}
                   className="w-4 h-4 accent-rose-500" />
-                次回から確認を表示しない
+                Don't ask again
               </label>
             </div>
           )}

@@ -68,7 +68,7 @@ export function AiScanModal({ isOpen, onClose, listId, masterItems, currentItemC
       setImageBase64(prepared.imageBase64)
       setPhase('preview')
     } catch (e) {
-      setError(e instanceof Error ? e.message : '画像の読み込みに失敗しました')
+      setError(e instanceof Error ? e.message : 'Failed to load image')
       setPhase('select')
     }
   }, [])
@@ -84,7 +84,7 @@ export function AiScanModal({ isOpen, onClose, listId, masterItems, currentItemC
         body: JSON.stringify({ imageBase64, mimeType, language }),
       })
       const json = await res.json() as { items?: { name: string; category: string; price?: number | null }[]; error?: string }
-      if (!res.ok || json.error) throw new Error(json.error ?? 'スキャン失敗')
+      if (!res.ok || json.error) throw new Error(json.error ?? 'Scan failed')
       const items = (json.items ?? []).map(({ name, price }) => ({
         name,
         price: typeof price === 'number' ? price : null,
@@ -133,7 +133,7 @@ export function AiScanModal({ isOpen, onClose, listId, masterItems, currentItemC
         const { error: insertErr } = await supabase.from('sl_list_items').insert(row)
         if (insertErr) {
           setAdding(false)
-          setError(`追加失敗: ${insertErr.message}`)
+          setError(`Failed to add: ${insertErr.message}`)
           return
         }
       }
@@ -179,8 +179,8 @@ export function AiScanModal({ isOpen, onClose, listId, masterItems, currentItemC
                 <Camera size={28} className="text-white" />
               </div>
               <div className="text-center">
-                <p className="font-semibold text-rose-800">写真・スクショを選択</p>
-                <p className="text-xs text-rose-400 mt-1">レシート / メモアプリのスクショ / 商品棚</p>
+                <p className="font-semibold text-rose-800">Select photo or screenshot</p>
+                <p className="text-xs text-rose-400 mt-1">Receipt, note screenshot, or shelf photo</p>
               </div>
             </button>
           )}
@@ -198,7 +198,7 @@ export function AiScanModal({ isOpen, onClose, listId, masterItems, currentItemC
           {(phase === 'preview' || phase === 'scanning') && imagePreview && (
             <div className="space-y-4">
               {/* eslint-disable-next-line @next/next/no-img-element */}
-              <img src={imagePreview} alt="選択した画像" className="w-full rounded-2xl object-contain max-h-64" />
+              <img src={imagePreview} alt="Selected image" className="w-full rounded-2xl object-contain max-h-64" />
               {error && <p className="text-sm text-red-500 text-center">{error}</p>}
               <div>
                 <label className="text-sm text-rose-600 font-semibold">Language</label>
@@ -211,14 +211,14 @@ export function AiScanModal({ isOpen, onClose, listId, masterItems, currentItemC
               <div className="flex gap-3">
                 <button onClick={() => { setPhase('select'); setImagePreview(null) }}
                   className="flex-1 border border-rose-200 text-rose-400 rounded-2xl py-3 text-sm font-medium hover:bg-rose-50 transition-colors">
-                  選び直す
+                  Change photo
                 </button>
                 <button onClick={handleScan} disabled={phase === 'scanning'}
                   className="flex-1 bg-gradient-to-r from-rose-400 to-pink-500 text-white rounded-2xl py-3 text-sm font-semibold disabled:opacity-60 transition-colors flex items-center justify-center gap-2">
                   {phase === 'scanning' ? (
-                    <><span className="w-4 h-4 border-2 border-white/40 border-t-white rounded-full animate-spin" />解析中...</>
+                    <><span className="w-4 h-4 border-2 border-white/40 border-t-white rounded-full animate-spin" />Scanning...</>
                   ) : (
-                    <><Sparkles size={15} />AIでスキャン</>
+                    <><Sparkles size={15} />Scan with AI</>
                   )}
                 </button>
               </div>
@@ -228,7 +228,7 @@ export function AiScanModal({ isOpen, onClose, listId, masterItems, currentItemC
           {/* 結果フェーズ */}
           {phase === 'results' && (
             <div className="space-y-3">
-              <p className="text-sm text-rose-500 font-medium">{detected.length}件検出 — 追加するものを選んでください</p>
+              <p className="text-sm text-rose-500 font-medium">{detected.length}items detected — select items to add</p>
               {detected.map((item, i) => (
                 <button key={i} onClick={() => toggleSelect(i)}
                   className={`w-full flex items-center gap-3 p-3 rounded-2xl border transition-all text-left
@@ -242,11 +242,11 @@ export function AiScanModal({ isOpen, onClose, listId, masterItems, currentItemC
                       {item.masterItem?.name ?? item.name}
                     </p>
                     {!item.masterItem && (
-                      <p className="text-[10px] text-rose-300">My Itemsに未登録</p>
+                      <p className="text-[10px] text-rose-300">Not in My Items</p>
                     )}
                   </div>
                   {item.masterItem && (
-                    <span className="text-xs bg-rose-100 text-rose-500 px-2 py-0.5 rounded-full shrink-0">登録済み</span>
+                    <span className="text-xs bg-rose-100 text-rose-500 px-2 py-0.5 rounded-full shrink-0">In My Items</span>
                   )}
                 </button>
               ))}
@@ -260,7 +260,7 @@ export function AiScanModal({ isOpen, onClose, listId, masterItems, currentItemC
             <button onClick={handleAdd} disabled={adding}
               className="w-full bg-gradient-to-r from-rose-400 to-pink-500 text-white font-semibold rounded-2xl py-3.5 disabled:opacity-60 transition-colors flex items-center justify-center gap-2 shadow-lg shadow-rose-200/50">
               <Plus size={18} />
-              {adding ? '追加中...' : `${selected.size}件をリストに追加`}
+              {adding ? 'Adding...' : `${selected.size}items to list`}
             </button>
           </div>
         )}

@@ -19,7 +19,7 @@ export function DefaultImagePicker({ isOpen, currentUrl, onSelect, onClose }: Pr
 
         {/* ヘッダー */}
         <div className="flex items-center justify-between px-5 pt-4 pb-3 shrink-0 border-b border-rose-50">
-          <p className="text-sm font-bold text-rose-800">デフォルト画像から選ぶ</p>
+          <p className="text-sm font-bold text-rose-800">Choose default image</p>
           <button onClick={onClose} className="w-8 h-8 rounded-full bg-rose-50 flex items-center justify-center text-rose-400 hover:bg-rose-100 transition-colors">
             <X size={16} />
           </button>

@@ -348,7 +348,7 @@ export function ItemPickerModal({ listId, isOpen, onClose, masterItems, onAdded,
 
         {selectedItemCount > 0 && (
           <div className="px-3 pb-3 pt-1 border-t border-rose-100 shrink-0 text-xs text-rose-500">
-            {selectedItemCount} items / {selectedTotalQty} qty を反映中
+            {selectedItemCount} items / {selectedTotalQty} qty added
           </div>
         )}
       </div>
