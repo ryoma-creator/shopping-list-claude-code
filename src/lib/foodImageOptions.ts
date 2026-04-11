@@ -19,6 +19,16 @@ export const FOOD_IMAGE_OPTIONS: FoodImageOption[] = [
     keywords: ['yogurt', 'yoghurt', 'greek yogurt', 'greek yoghurt', 'ヨーグルト', 'よーぐると', 'グリークヨーグルト', 'yaourt', 'yogur', '요거트'],
   },
   {
+    label: 'Apple / りんご',
+    url: `${CDN}/v1775897931/apple_c34ef1.jpg`,
+    keywords: ['apple', 'りんご', 'リンゴ', '林檎', 'pomme', 'mela', 'manzana', '사과'],
+  },
+  {
+    label: 'Lemon / レモン',
+    url: `${CDN}/v1775897910/lemon_nbsxnl.jpg`,
+    keywords: ['lemon', 'レモン', 'れもん', '檸檬', 'citron', 'limone', 'limón', '레몬'],
+  },
+  {
     label: 'Banana / バナナ',
     url: `${CDN}/v1775896645/high-angle-shot-banana-isolated-white-surface_jviohg.jpg`,
     keywords: ['banana', 'バナナ', 'ばなな', 'banane', 'plátano', '바나나'],
