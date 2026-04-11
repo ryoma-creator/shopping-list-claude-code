@@ -2,6 +2,7 @@
 import { useState, useEffect, useCallback, useRef } from 'react'
 import { Plus, Camera } from 'lucide-react'
 import { supabase } from '@/lib/supabase/client'
+import { offlineCache } from '@/lib/offlineCache'
 import { MasterItemModal } from '@/components/MasterItemModal'
 import { AiMasterScanModal } from '@/components/AiMasterScanModal'
 import { saveDeleteConfirmSetting } from '@/lib/userSettings'
@@ -27,7 +28,7 @@ interface Props {
 }
 
 export function MasterScreen({ onMasterItemsChange, userId, deleteConfirmEnabled }: Props) {
-  const [items, setItems] = useState<MasterItem[]>([])
+  const [items, setItems] = useState<MasterItem[]>(() => offlineCache.loadMasterItems<MasterItem[]>() ?? [])
   const [modalOpen, setModalOpen] = useState(false)
   const [scanOpen, setScanOpen] = useState(false)
   const [editItem, setEditItem] = useState<MasterItem | undefined>()
@@ -41,8 +42,18 @@ export function MasterScreen({ onMasterItemsChange, userId, deleteConfirmEnabled
   const longPressTriggered = useRef(false)
 
   const loadItems = useCallback(async () => {
-    const { data } = await supabase.from('sl_master_items').select('*').order('category').order('name')
-    if (data) { setItems(data); onMasterItemsChange(data) }
+    const { data, error } = await supabase.from('sl_master_items').select('*').order('category').order('name')
+    if (error) {
+      // オフライン時はキャッシュをそのまま使う
+      const cached = offlineCache.loadMasterItems<MasterItem[]>()
+      if (cached) { setItems(cached); onMasterItemsChange(cached) }
+      return
+    }
+    if (data) {
+      setItems(data)
+      offlineCache.saveMasterItems(data)
+      onMasterItemsChange(data)
+    }
   }, [onMasterItemsChange])
 
   useEffect(() => { loadItems() }, [loadItems])
