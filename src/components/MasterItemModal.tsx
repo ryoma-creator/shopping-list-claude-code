@@ -2,6 +2,8 @@
 import { useState, useEffect, useRef } from 'react'
 import { X, Camera, Minus, Plus } from 'lucide-react'
 import { supabase } from '@/lib/supabase/client'
+import { saveDeleteConfirmSetting } from '@/lib/userSettings'
+import { resolveDefaultFoodImage } from '@/lib/defaultFoodImage'
 import type { Category, MasterItem } from '@/types/database'
 
 const CATEGORIES: { value: Category; emoji: string; label: string }[] = [
@@ -24,9 +26,10 @@ interface Props {
   onSave: () => void
   onDelete?: (id: string) => void
   userId: string
+  deleteConfirmEnabled: boolean
 }
 
-export function MasterItemModal({ item, isOpen, onClose, onSave, onDelete, userId }: Props) {
+export function MasterItemModal({ item, isOpen, onClose, onSave, onDelete, userId, deleteConfirmEnabled }: Props) {
   const [name, setName] = useState('')
   const [category, setCategory] = useState<Category>('other')
   const [priceStr, setPriceStr] = useState('')
@@ -36,6 +39,7 @@ export function MasterItemModal({ item, isOpen, onClose, onSave, onDelete, userI
   const [loading, setLoading] = useState(false)
   const [error, setError] = useState<string | null>(null)
   const [showDeleteConfirm, setShowDeleteConfirm] = useState(false)
+  const [skipDeleteConfirmChecked, setSkipDeleteConfirmChecked] = useState(false)
   const fileInputRef = useRef<HTMLInputElement>(null)
 
   useEffect(() => {
@@ -54,6 +58,7 @@ export function MasterItemModal({ item, isOpen, onClose, onSave, onDelete, userI
     }
     setError(null)
     setShowDeleteConfirm(false)
+    setSkipDeleteConfirmChecked(false)
   }, [item, isOpen])
 
   const priceNum = priceStr === '' ? 0 : Number(priceStr)
@@ -92,10 +97,9 @@ export function MasterItemModal({ item, isOpen, onClose, onSave, onDelete, userI
     setLoading(true)
     setError(null)
     try {
-      // ベースのペイロード（user_idを含む）
+      const autoImage = imageUrl ?? await resolveDefaultFoodImage(name.trim(), category)
       const base = { name: name.trim(), category, default_price: priceNum, default_qty: qty, user_id: userId }
-      // 写真がある場合はimage_urlも含める
-      const payload = imageUrl ? { ...base, image_url: imageUrl } : base
+      const payload = autoImage ? { ...base, image_url: autoImage } : base
 
       if (item) {
         const { error: err } = await supabase.from('sl_master_items').update(payload).eq('id', item.id)
@@ -114,9 +118,9 @@ export function MasterItemModal({ item, isOpen, onClose, onSave, onDelete, userI
   if (!isOpen) return null
 
   return (
-    <div className="fixed inset-0 z-50 flex items-end">
+    <div className="fixed inset-0 z-[80] flex items-end">
       <div className="absolute inset-0 bg-black/30" onClick={onClose} />
-      <div className="relative w-full max-w-[430px] mx-auto bg-white rounded-t-3xl p-5 pb-24 space-y-4 max-h-[90vh] overflow-y-auto">
+      <div className="relative w-full max-w-[430px] mx-auto bg-white rounded-t-3xl p-5 pb-8 space-y-4 max-h-[90vh] overflow-y-auto">
         <div className="flex items-center justify-between">
           <h2 className="text-lg font-bold text-rose-800">
             {item ? 'Edit Item' : 'Add New Item'}
@@ -227,23 +231,26 @@ export function MasterItemModal({ item, isOpen, onClose, onSave, onDelete, userI
           </div>
         </div>
 
-        <button
-          onClick={handleSave}
-          disabled={loading || !name.trim()}
-          className="w-full bg-gradient-to-r from-rose-400 to-pink-500 hover:from-rose-500 hover:to-pink-600 disabled:opacity-50 text-white font-bold rounded-2xl py-3.5 transition-all shadow-lg shadow-rose-200/50 text-base"
-        >
-          {loading ? 'Saving...' : item ? 'Save Changes' : 'Add Item ✨'}
-        </button>
-
-        {/* Delete button (edit mode only) */}
-        {item && onDelete && !showDeleteConfirm && (
+        <div className="space-y-2 pt-2">
           <button
-            onClick={() => setShowDeleteConfirm(true)}
-            className="w-full text-rose-300 hover:text-rose-500 text-sm font-medium py-2 transition-colors"
+            onClick={handleSave}
+            disabled={loading || !name.trim()}
+            className="w-full bg-gradient-to-r from-rose-400 to-pink-500 hover:from-rose-500 hover:to-pink-600 disabled:opacity-50 text-white font-bold rounded-2xl py-3.5 transition-all shadow-lg shadow-rose-200/50 text-base"
           >
-            Delete this item
+            {loading ? 'Saving...' : item ? 'Save Changes' : 'Add Item ✨'}
           </button>
-        )}
+          {item && onDelete && !showDeleteConfirm && (
+            <button
+              onClick={() => {
+                if (deleteConfirmEnabled) setShowDeleteConfirm(true)
+                else { onDelete(item.id); onClose() }
+              }}
+              className="w-full bg-white/95 border border-rose-200 text-rose-500 rounded-2xl py-2.5 text-sm font-semibold"
+            >
+              Delete this item
+            </button>
+          )}
+        </div>
 
         {/* Delete confirmation */}
         {item && onDelete && showDeleteConfirm && (
@@ -254,11 +261,20 @@ export function MasterItemModal({ item, isOpen, onClose, onSave, onDelete, userI
                 className="flex-1 border border-rose-200 text-rose-400 rounded-xl py-2 text-sm font-medium">
                 Cancel
               </button>
-              <button onClick={() => { onDelete(item.id); onClose() }}
-                className="flex-1 bg-red-500 text-white rounded-xl py-2 text-sm font-semibold">
+              <button onClick={() => {
+                if (skipDeleteConfirmChecked) saveDeleteConfirmSetting(false)
+                onDelete(item.id); onClose()
+              }}
+                className="flex-1 bg-gradient-to-r from-rose-400 to-pink-500 text-white rounded-xl py-2 text-sm font-semibold">
                 Delete
               </button>
             </div>
+            <label className="flex items-center justify-center gap-2 text-xs text-rose-500">
+              <input type="checkbox" checked={skipDeleteConfirmChecked}
+                onChange={(e) => setSkipDeleteConfirmChecked(e.target.checked)}
+                className="w-4 h-4 accent-rose-500" />
+              次回から確認を表示しない
+            </label>
           </div>
         )}
       </div>

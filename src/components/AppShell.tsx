@@ -8,12 +8,15 @@ import { AuthScreen } from '@/components/AuthScreen'
 import { useAuth } from '@/hooks/useAuth'
 import { supabase } from '@/lib/supabase/client'
 import { offlineCache } from '@/lib/offlineCache'
-import { LogOut, ShoppingCart, WifiOff, RefreshCw } from 'lucide-react'
+import { loadDeleteConfirmSetting, saveDeleteConfirmSetting } from '@/lib/userSettings'
+import { LogOut, ShoppingCart, WifiOff, RefreshCw, Settings, X } from 'lucide-react'
 import type { MasterItem } from '@/types/database'
 
 export function AppShell() {
   const { user, loading: authLoading, displayName, signIn, signUp, signOut, resetPassword } = useAuth()
   const [activeTab, setActiveTab] = useState<TabId>('today')
+  const [showSettings, setShowSettings] = useState(false)
+  const [deleteConfirmEnabled, setDeleteConfirmEnabled] = useState(true)
   const [isOffline, setIsOffline] = useState(false)
   const [isSyncing, setIsSyncing] = useState(false)
   const syncingRef = useRef(false)
@@ -41,6 +44,10 @@ export function AppShell() {
   useEffect(() => {
     if (user) loadMasterItems()
   }, [user, loadMasterItems])
+
+  useEffect(() => {
+    setDeleteConfirmEnabled(loadDeleteConfirmSetting())
+  }, [])
 
   useEffect(() => {
     if (user && activeTab === 'today') {
@@ -161,20 +168,28 @@ export function AppShell() {
           </div>
           <span className="text-sm font-bold text-rose-800">{displayName}&apos;s List</span>
         </div>
-        <button
-          onClick={signOut}
-          className="flex items-center gap-1.5 text-xs text-rose-400 hover:text-rose-600 transition-colors px-2 py-1.5 rounded-lg hover:bg-rose-100"
-        >
-          <LogOut size={14} />
-        </button>
+        <div className="flex items-center gap-1">
+          <button
+            onClick={() => setShowSettings(true)}
+            className="flex items-center gap-1.5 text-xs text-rose-400 hover:text-rose-600 transition-colors px-2 py-1.5 rounded-lg hover:bg-rose-100"
+          >
+            <Settings size={14} />
+          </button>
+          <button
+            onClick={signOut}
+            className="flex items-center gap-1.5 text-xs text-rose-400 hover:text-rose-600 transition-colors px-2 py-1.5 rounded-lg hover:bg-rose-100"
+          >
+            <LogOut size={14} />
+          </button>
+        </div>
       </div>
 
       <main className="flex-1 flex flex-col relative overflow-hidden pb-16">
         {activeTab === 'today' && (
-          <TodayScreen masterItems={masterItems} userId={user.id} />
+          <TodayScreen masterItems={masterItems} userId={user.id} deleteConfirmEnabled={deleteConfirmEnabled} onMasterItemDeleted={loadMasterItems} />
         )}
         {activeTab === 'master' && (
-          <MasterScreen onMasterItemsChange={setMasterItems} userId={user.id} />
+          <MasterScreen onMasterItemsChange={setMasterItems} userId={user.id} deleteConfirmEnabled={deleteConfirmEnabled} />
         )}
         {activeTab === 'templates' && (
           <TemplatesScreen onUseTemplate={() => setActiveTab('today')} userId={user.id} />
@@ -182,6 +197,36 @@ export function AppShell() {
       </main>
 
       <TabBar activeTab={activeTab} onTabChange={setActiveTab} />
+
+      {showSettings && (
+        <div className="fixed inset-0 z-[90] flex items-end">
+          <div className="absolute inset-0 bg-black/30" onClick={() => setShowSettings(false)} />
+          <div className="relative w-full max-w-[430px] mx-auto bg-white rounded-t-3xl p-5 pb-8 mb-16 space-y-4">
+            <div className="flex items-center justify-between">
+              <p className="font-bold text-rose-800">Settings</p>
+              <button onClick={() => setShowSettings(false)} className="text-rose-400">
+                <X size={18} />
+              </button>
+            </div>
+            <label className="flex items-center justify-between gap-3 p-3 rounded-2xl bg-rose-50 border border-rose-100">
+              <div>
+                <p className="text-sm font-semibold text-rose-700">削除前の確認を表示</p>
+                <p className="text-xs text-rose-400">オフにすると削除はすぐ実行されます</p>
+              </div>
+              <input
+                type="checkbox"
+                checked={deleteConfirmEnabled}
+                onChange={(e) => {
+                  const enabled = e.target.checked
+                  setDeleteConfirmEnabled(enabled)
+                  saveDeleteConfirmSetting(enabled)
+                }}
+                className="w-5 h-5 accent-rose-500"
+              />
+            </label>
+          </div>
+        </div>
+      )}
     </div>
   )
 }

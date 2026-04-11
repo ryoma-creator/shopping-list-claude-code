@@ -3,6 +3,7 @@ import { useMemo, useRef, useState } from 'react'
 import { X } from 'lucide-react'
 import { supabase } from '@/lib/supabase/client'
 import { offlineCache } from '@/lib/offlineCache'
+import { MasterItemEditSheet } from '@/components/MasterItemEditSheet'
 import type { MasterItem, ListItem } from '@/types/database'
 
 const CATS = [
@@ -31,13 +32,15 @@ interface Props {
   onClose: () => void
   masterItems: MasterItem[]
   onAdded?: () => void
+  onMasterItemDeleted?: () => void
 }
 
-export function ItemPickerModal({ listId, isOpen, onClose, masterItems, onAdded }: Props) {
+export function ItemPickerModal({ listId, isOpen, onClose, masterItems, onAdded, onMasterItemDeleted }: Props) {
   const [activeCat, setActiveCat] = useState('all')
   const [selectedQty, setSelectedQty] = useState<Record<string, number>>({})
   const [adjustingItemId, setAdjustingItemId] = useState<string | null>(null)
-  const [saving, setSaving] = useState(false)
+  const [inFlight, setInFlight] = useState<Set<string>>(new Set())
+  const [addedRowIds, setAddedRowIds] = useState<Record<string, string>>({})
   const longPressTimer = useRef<number | null>(null)
   const longPressTriggered = useRef(false)
 
@@ -53,19 +56,39 @@ export function ItemPickerModal({ listId, isOpen, onClose, masterItems, onAdded 
     [selectedQty]
   )
   const adjustingItem = masterItems.find(i => i.id === adjustingItemId) ?? null
-  const adjustingQty = adjustingItem ? (selectedQty[adjustingItem.id] ?? 0) : 0
 
-  const addOne = (itemId: string) => {
-    setSelectedQty(prev => ({ ...prev, [itemId]: (prev[itemId] ?? 0) + 1 }))
-  }
-
-  const setQty = (itemId: string, qty: number) => {
-    setSelectedQty(prev => {
-      const next = { ...prev }
-      if (qty <= 0) delete next[itemId]
-      else next[itemId] = qty
+  const markInflight = (itemId: string, on: boolean) => {
+    setInFlight(prev => {
+      const next = new Set(prev)
+      if (on) next.add(itemId)
+      else next.delete(itemId)
       return next
     })
+  }
+
+  const addOneLocal = (itemId: string, rowId: string) => {
+    setSelectedQty(prev => ({ ...prev, [itemId]: (prev[itemId] ?? 0) + 1 }))
+    setAddedRowIds(prev => ({ ...prev, [itemId]: rowId }))
+  }
+
+  const removeOneLocal = (itemId: string, removeRowId: boolean) => {
+    const rowId = addedRowIds[itemId]
+    if (!rowId) return null
+    if (removeRowId) {
+      setAddedRowIds(prev => {
+        const next = { ...prev }
+        delete next[itemId]
+        return next
+      })
+    }
+    setSelectedQty(prev => {
+      const nextQty = Math.max(0, (prev[itemId] ?? 0) - 1)
+      const next = { ...prev }
+      if (nextQty === 0) delete next[itemId]
+      else next[itemId] = nextQty
+      return next
+    })
+    return rowId
   }
 
   const startLongPress = (itemId: string) => {
@@ -82,38 +105,50 @@ export function ItemPickerModal({ listId, isOpen, onClose, masterItems, onAdded 
     longPressTimer.current = null
   }
 
-  const saveSelectedItems = async () => {
-    if (selectedItemCount === 0 || saving) return
-    setSaving(true)
+  const addOneAndPersist = async (item: MasterItem) => {
+    if (inFlight.has(item.id)) return
+    markInflight(item.id, true)
     try {
-      const { data: latest } = await supabase
-        .from('sl_list_items')
-        .select('sort_order')
-        .eq('list_id', listId)
-        .order('sort_order', { ascending: false })
-        .limit(1)
-      let sortBase = (latest?.[0]?.sort_order ?? -1) + 1
-      const toInsert: Omit<ListItem, 'id' | 'created_at'>[] = []
-      for (const item of masterItems) {
-        const q = selectedQty[item.id] ?? 0
-        if (q <= 0) continue
-        toInsert.push({
+      const existingRowId = addedRowIds[item.id]
+      const nextTapCount = (selectedQty[item.id] ?? 0) + 1
+      const unitQty = Math.max(1, item.default_qty)
+      const nextQty = nextTapCount * unitQty
+
+      if (existingRowId) {
+        if (existingRowId.startsWith('temp_')) {
+          const cached = offlineCache.loadTodayItems<ListItem[]>() ?? []
+          offlineCache.saveTodayItems(cached.map(i => i.id === existingRowId ? { ...i, qty: nextQty } : i))
+          const ops = offlineCache.loadPendingOps()
+          const old = ops.find(o => o.id === existingRowId && o.type === 'insert_list_item')
+          if (old && old.type === 'insert_list_item') {
+            offlineCache.removePendingOp(existingRowId)
+            offlineCache.addPendingOp({
+              ...old,
+              payload: { ...old.payload, qty: nextQty },
+            })
+          }
+          addOneLocal(item.id, existingRowId)
+        } else {
+          const { error } = await supabase.from('sl_list_items').update({ qty: nextQty }).eq('id', existingRowId)
+          if (error) throw error
+          addOneLocal(item.id, existingRowId)
+        }
+      } else {
+        const { data: latest } = await supabase.from('sl_list_items')
+          .select('sort_order').eq('list_id', listId)
+          .order('sort_order', { ascending: false }).limit(1)
+        const row = {
           list_id: listId,
           master_item_id: item.id,
           name: item.name,
           price: item.default_price,
-          qty: Math.max(1, q * Math.max(1, item.default_qty)),
+          qty: unitQty,
           is_checked: false,
-          sort_order: sortBase++,
-        })
-      }
-      if (toInsert.length === 0) return
-
-      if (!navigator.onLine) {
-        const cached = offlineCache.loadTodayItems<ListItem[]>() ?? []
-        const now = Date.now()
-        toInsert.forEach((row, i) => {
-          const tempId = `temp_${now}_${i}`
+          sort_order: (latest?.[0]?.sort_order ?? -1) + 1,
+        }
+        if (!navigator.onLine) {
+          const cached = offlineCache.loadTodayItems<ListItem[]>() ?? []
+          const tempId = `temp_${Date.now()}_${Math.random().toString(36).slice(2)}`
           cached.push({ ...row, id: tempId, created_at: new Date().toISOString() })
           offlineCache.addPendingOp({
             id: tempId,
@@ -121,25 +156,82 @@ export function ItemPickerModal({ listId, isOpen, onClose, masterItems, onAdded 
             payload: row,
             createdAt: Date.now(),
           })
-        })
-        offlineCache.saveTodayItems(cached)
-      } else {
-        const { error } = await supabase.from('sl_list_items').insert(toInsert)
-        if (error) throw error
+          offlineCache.saveTodayItems(cached)
+          addOneLocal(item.id, tempId)
+        } else {
+          const { data, error } = await supabase.from('sl_list_items')
+            .insert(row).select('id').single()
+          if (error) throw error
+          if (!data?.id) throw new Error('追加IDの取得に失敗しました')
+          addOneLocal(item.id, data.id)
+        }
       }
 
       onAdded?.()
-      handleClose()
     } catch (e) {
-      const msg = e instanceof Error ? e.message : 'Failed to add selected items'
+      const msg = e instanceof Error ? e.message : 'Failed to add item'
       alert(msg)
     } finally {
-      setSaving(false)
+      markInflight(item.id, false)
     }
+  }
+
+  const removeOneAndPersist = async (item: MasterItem) => {
+    if (inFlight.has(item.id)) return
+    const rowId = addedRowIds[item.id]
+    if (!rowId) return
+    const currentTapCount = selectedQty[item.id] ?? 0
+    const unitQty = Math.max(1, item.default_qty)
+    const nextTapCount = Math.max(0, currentTapCount - 1)
+    const nextQty = nextTapCount * unitQty
+    removeOneLocal(item.id, nextTapCount === 0)
+    markInflight(item.id, true)
+    try {
+      if (rowId.startsWith('temp_')) {
+        if (nextTapCount === 0) {
+          const cached = offlineCache.loadTodayItems<ListItem[]>() ?? []
+          offlineCache.saveTodayItems(cached.filter(i => i.id !== rowId))
+          offlineCache.removePendingOp(rowId)
+        } else {
+          const cached = offlineCache.loadTodayItems<ListItem[]>() ?? []
+          offlineCache.saveTodayItems(cached.map(i => i.id === rowId ? { ...i, qty: nextQty } : i))
+          const ops = offlineCache.loadPendingOps()
+          const old = ops.find(o => o.id === rowId && o.type === 'insert_list_item')
+          if (old && old.type === 'insert_list_item') {
+            offlineCache.removePendingOp(rowId)
+            offlineCache.addPendingOp({
+              ...old,
+              payload: { ...old.payload, qty: nextQty },
+            })
+          }
+        }
+      } else {
+        const { error } = nextTapCount === 0
+          ? await supabase.from('sl_list_items').delete().eq('id', rowId)
+          : await supabase.from('sl_list_items').update({ qty: nextQty }).eq('id', rowId)
+        if (error) throw error
+      }
+      onAdded?.()
+    } catch (e) {
+      addOneLocal(item.id, rowId)
+      const msg = e instanceof Error ? e.message : 'Failed to remove item'
+      alert(msg)
+    } finally {
+      markInflight(item.id, false)
+    }
+  }
+
+  const handleMasterItemChanged = (itemId: string) => {
+    // マスターアイテム編集・削除後にリストから除去してリフレッシュ
+    setSelectedQty(prev => { const next = { ...prev }; delete next[itemId]; return next })
+    setAddedRowIds(prev => { const next = { ...prev }; delete next[itemId]; return next })
+    setAdjustingItemId(null)
+    onMasterItemDeleted?.()
   }
 
   const handleClose = () => {
     setSelectedQty({})
+    setAddedRowIds({})
     setAdjustingItemId(null)
     endLongPress()
     onClose()
@@ -148,7 +240,7 @@ export function ItemPickerModal({ listId, isOpen, onClose, masterItems, onAdded 
   if (!isOpen) return null
 
   return (
-    <div className="fixed inset-0 z-50 flex flex-col">
+    <div className="fixed inset-0 z-[70] flex flex-col">
       <div className="absolute inset-0 bg-black/30" onClick={handleClose} />
 
       <div className="relative flex-1 flex flex-col mt-8 mx-auto w-full max-w-[430px] bg-white rounded-t-3xl overflow-hidden">
@@ -217,7 +309,7 @@ export function ItemPickerModal({ listId, isOpen, onClose, masterItems, onAdded 
                           longPressTriggered.current = false
                           return
                         }
-                        addOne(item.id)
+                        void addOneAndPersist(item)
                       }}
                       className={`flex flex-col items-center p-2.5 rounded-2xl transition-all active:scale-90 relative overflow-hidden
                         ${added
@@ -255,34 +347,18 @@ export function ItemPickerModal({ listId, isOpen, onClose, masterItems, onAdded 
         </div>
 
         {selectedItemCount > 0 && (
-          <div className="px-3 pb-6 pt-2 border-t border-rose-100 shrink-0">
-            <button onClick={saveSelectedItems} disabled={saving}
-              className="w-full bg-gradient-to-r from-rose-400 to-pink-500 text-white font-semibold rounded-2xl py-3 disabled:opacity-50">
-              {saving ? 'Adding...' : `${selectedItemCount} items / ${selectedTotalQty} qty を追加`}
-            </button>
+          <div className="px-3 pb-3 pt-1 border-t border-rose-100 shrink-0 text-xs text-rose-500">
+            {selectedItemCount} items / {selectedTotalQty} qty を反映中
           </div>
         )}
       </div>
 
-      {adjustingItem && (
-        <div className="fixed inset-0 z-[70] flex items-end">
-          <div className="absolute inset-0 bg-black/30" onClick={() => setAdjustingItemId(null)} />
-          <div className="relative w-full max-w-[430px] mx-auto bg-white rounded-t-3xl p-5 pb-8 space-y-4">
-            <p className="font-bold text-rose-800">数量を調整: {adjustingItem.name}</p>
-            <div className="flex items-center justify-center gap-4">
-              <button onClick={() => setQty(adjustingItem.id, adjustingQty - 1)}
-                className="w-12 h-12 rounded-xl border border-rose-200 text-rose-500 text-xl">-</button>
-              <div className="min-w-16 text-center text-2xl font-black text-rose-700">{adjustingQty}</div>
-              <button onClick={() => setQty(adjustingItem.id, adjustingQty + 1)}
-                className="w-12 h-12 rounded-xl border border-rose-200 text-rose-500 text-xl">+</button>
-            </div>
-            <button onClick={() => setAdjustingItemId(null)}
-              className="w-full border border-rose-200 text-rose-500 rounded-2xl py-2.5 text-sm font-semibold">
-              OK
-            </button>
-          </div>
-        </div>
-      )}
+      <MasterItemEditSheet
+        item={adjustingItem}
+        onClose={() => setAdjustingItemId(null)}
+        onSaved={() => handleMasterItemChanged(adjustingItem?.id ?? '')}
+        onDeleted={() => handleMasterItemChanged(adjustingItem?.id ?? '')}
+      />
     </div>
   )
 }

@@ -10,11 +10,12 @@ import { EmptyState } from '@/components/EmptyState'
 import { ItemPickerModal } from '@/components/ItemPickerModal'
 import { AiScanModal } from '@/components/AiScanModal'
 import { Celebration } from '@/components/Celebration'
+import { saveDeleteConfirmSetting } from '@/lib/userSettings'
 import type { ListItem, MasterItem, ShoppingList } from '@/types/database'
 
-interface Props { masterItems: MasterItem[]; userId: string }
+interface Props { masterItems: MasterItem[]; userId: string; deleteConfirmEnabled: boolean; onMasterItemDeleted?: () => void }
 
-export function TodayScreen({ masterItems, userId }: Props) {
+export function TodayScreen({ masterItems, userId, deleteConfirmEnabled, onMasterItemDeleted }: Props) {
   const [list, setList] = useState<ShoppingList | null>(() =>
     offlineCache.loadTodayList<ShoppingList>()
   )
@@ -23,6 +24,7 @@ export function TodayScreen({ masterItems, userId }: Props) {
   )
   const [animatingIds, setAnimatingIds] = useState<Set<string>>(new Set())
   const [pendingDeleteId, setPendingDeleteId] = useState<string | null>(null)
+  const [skipDeleteConfirmChecked, setSkipDeleteConfirmChecked] = useState(false)
   const [showClearConfirm, setShowClearConfirm] = useState(false)
   const [pickerOpen, setPickerOpen] = useState(false)
   const [scanOpen, setScanOpen] = useState(false)
@@ -114,9 +116,9 @@ export function TodayScreen({ masterItems, userId }: Props) {
     }
   }
 
-  const confirmDelete = async () => {
-    if (!pendingDeleteId) return
-    const id = pendingDeleteId
+  const confirmDelete = async (directId?: string) => {
+    const id = directId ?? pendingDeleteId
+    if (!id) return
     setPendingDeleteId(null)
     setItems(prev => {
       const next = prev.filter(i => i.id !== id)
@@ -125,6 +127,11 @@ export function TodayScreen({ masterItems, userId }: Props) {
     })
     const { error } = await supabase.from('sl_list_items').delete().eq('id', id)
     if (error) console.warn('Delete sync failed (offline?):', error.message)
+  }
+
+  const requestDelete = (id: string) => {
+    if (deleteConfirmEnabled) setPendingDeleteId(id)
+    else void confirmDelete(id)
   }
 
   const clearAllItems = async () => {
@@ -253,12 +260,12 @@ export function TodayScreen({ masterItems, userId }: Props) {
           {leaving.map(item => (
             <ItemRow key={item.id} item={item} isLeaving
               masterItem={item.master_item_id ? masterMap.get(item.master_item_id) : undefined}
-              onToggle={handleToggle} onDeleteRequest={setPendingDeleteId} />
+              onToggle={handleToggle} onDeleteRequest={requestDelete} />
           ))}
           {unchecked.map(item => (
             <ItemRow key={item.id} item={item}
               masterItem={item.master_item_id ? masterMap.get(item.master_item_id) : undefined}
-              onToggle={handleToggle} onDeleteRequest={setPendingDeleteId} />
+              onToggle={handleToggle} onDeleteRequest={requestDelete} />
           ))}
         </AnimatePresence>
 
@@ -315,15 +322,25 @@ export function TodayScreen({ masterItems, userId }: Props) {
             <p className="text-2xl">🗑️</p>
             <p className="font-bold text-rose-800">Delete this item?</p>
             <div className="flex gap-3">
-              <button onClick={() => setPendingDeleteId(null)}
+              <button onClick={() => { setPendingDeleteId(null); setSkipDeleteConfirmChecked(false) }}
                 className="flex-1 border border-rose-200 text-rose-400 rounded-2xl py-2 text-sm font-medium hover:bg-rose-50 transition-colors">
                 Cancel
               </button>
-              <button onClick={confirmDelete}
+              <button onClick={() => {
+                if (skipDeleteConfirmChecked) saveDeleteConfirmSetting(false)
+                setSkipDeleteConfirmChecked(false)
+                void confirmDelete()
+              }}
                 className="flex-1 bg-gradient-to-r from-rose-400 to-pink-500 text-white rounded-2xl py-2 text-sm font-semibold transition-colors">
                 Delete
               </button>
             </div>
+            <label className="flex items-center justify-center gap-2 text-xs text-rose-500">
+              <input type="checkbox" checked={skipDeleteConfirmChecked}
+                onChange={(e) => setSkipDeleteConfirmChecked(e.target.checked)}
+                className="w-4 h-4 accent-rose-500" />
+              次回から確認を表示しない
+            </label>
           </div>
         </div>
       )}
@@ -342,7 +359,7 @@ export function TodayScreen({ masterItems, userId }: Props) {
                 Cancel
               </button>
               <button onClick={clearAllItems}
-                className="flex-1 bg-red-500 text-white rounded-2xl py-2.5 text-sm font-semibold transition-colors">
+                className="flex-1 bg-gradient-to-r from-rose-400 to-pink-500 text-white rounded-2xl py-2.5 text-sm font-semibold transition-colors">
                 Clear All
               </button>
             </div>
@@ -354,7 +371,7 @@ export function TodayScreen({ masterItems, userId }: Props) {
       {showSaveSheet && (
         <div className="fixed inset-0 z-50 flex items-end">
           <div className="absolute inset-0 bg-black/30" onClick={() => setShowSaveSheet(false)} />
-          <div className="relative w-full max-w-[430px] mx-auto bg-white rounded-t-3xl p-6 pb-24 space-y-3">
+          <div className="relative w-full max-w-[430px] mx-auto bg-white rounded-t-3xl p-6 pb-24 mb-16 space-y-3">
             <div className="flex items-center justify-between">
               <p className="font-bold text-rose-800">Save to Past Lists?</p>
               <button onClick={() => setShowSaveSheet(false)} className="text-rose-300 hover:text-rose-500">
@@ -374,7 +391,8 @@ export function TodayScreen({ masterItems, userId }: Props) {
 
       <ItemPickerModal listId={list.id} isOpen={pickerOpen}
         onClose={() => setPickerOpen(false)} masterItems={masterItems}
-        onAdded={() => loadItems(list.id)} />
+        onAdded={() => loadItems(list.id)}
+        onMasterItemDeleted={onMasterItemDeleted} />
 
       <AiScanModal isOpen={scanOpen} onClose={() => setScanOpen(false)}
         listId={list.id} masterItems={masterItems}
