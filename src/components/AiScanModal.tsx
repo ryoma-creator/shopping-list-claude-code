@@ -116,7 +116,8 @@ export function AiScanModal({ isOpen, onClose, listId, masterItems, currentItemC
       const row = {
         list_id: listId,
         master_item_id: masterItem?.id ?? null,
-        name: masterItem?.name ?? name,
+        // 言語選択の結果を優先するため、検出名をそのまま使う
+        name,
         price: masterItem?.default_price ?? (price ?? 0),
         qty: masterItem?.default_qty ?? 1,
         is_checked: false,
@@ -180,9 +181,9 @@ export function AiScanModal({ isOpen, onClose, listId, masterItems, currentItemC
           )}
           {phase === 'select' && (
             <div className="mt-3">
-              <label className="text-xs text-rose-500 font-medium">言語</label>
+              <label className="text-sm text-rose-600 font-semibold">Language</label>
               <select value={language} onChange={e => setLanguage(e.target.value as ScanLanguage)}
-                className="mt-1 w-full rounded-xl border border-rose-200 bg-white px-3 py-2 text-sm text-rose-700">
+                className="mt-1 w-full rounded-2xl border border-rose-300 bg-rose-50 px-4 py-3 text-base font-semibold text-rose-700">
                 {LANGUAGE_OPTIONS.map(opt => <option key={opt.value} value={opt.value}>{opt.label}</option>)}
               </select>
             </div>
@@ -195,9 +196,9 @@ export function AiScanModal({ isOpen, onClose, listId, masterItems, currentItemC
               <img src={imagePreview} alt="選択した画像" className="w-full rounded-2xl object-contain max-h-64" />
               {error && <p className="text-sm text-red-500 text-center">{error}</p>}
               <div>
-                <label className="text-xs text-rose-500 font-medium">言語</label>
+                <label className="text-sm text-rose-600 font-semibold">Language</label>
                 <select value={language} onChange={e => setLanguage(e.target.value as ScanLanguage)}
-                  className="mt-1 w-full rounded-xl border border-rose-200 bg-white px-3 py-2 text-sm text-rose-700"
+                  className="mt-1 w-full rounded-2xl border border-rose-300 bg-rose-50 px-4 py-3 text-base font-semibold text-rose-700"
                   disabled={phase === 'scanning'}>
                   {LANGUAGE_OPTIONS.map(opt => <option key={opt.value} value={opt.value}>{opt.label}</option>)}
                 </select>
