@@ -1,9 +1,10 @@
 'use client'
-import { useState, useEffect, useCallback } from 'react'
+import { useState, useEffect, useCallback, useRef } from 'react'
 import { Plus, Camera } from 'lucide-react'
 import { supabase } from '@/lib/supabase/client'
 import { MasterItemModal } from '@/components/MasterItemModal'
 import { AiMasterScanModal } from '@/components/AiMasterScanModal'
+import { saveDeleteConfirmSetting } from '@/lib/userSettings'
 import type { Category, MasterItem } from '@/types/database'
 
 const CATEGORY_EMOJI: Record<Category | string, string> = {
@@ -21,14 +22,19 @@ const CATEGORY_LABEL: Record<Category | string, string> = {
 interface Props {
   onMasterItemsChange: (items: MasterItem[]) => void
   userId: string
+  deleteConfirmEnabled: boolean
 }
 
-export function MasterScreen({ onMasterItemsChange, userId }: Props) {
+export function MasterScreen({ onMasterItemsChange, userId, deleteConfirmEnabled }: Props) {
   const [items, setItems] = useState<MasterItem[]>([])
   const [modalOpen, setModalOpen] = useState(false)
   const [scanOpen, setScanOpen] = useState(false)
   const [editItem, setEditItem] = useState<MasterItem | undefined>()
+  const [quickItem, setQuickItem] = useState<MasterItem | null>(null)
   const [pendingDeleteId, setPendingDeleteId] = useState<string | null>(null)
+  const [skipDeleteConfirmChecked, setSkipDeleteConfirmChecked] = useState(false)
+  const longPressTimer = useRef<number | null>(null)
+  const longPressTriggered = useRef(false)
 
   const loadItems = useCallback(async () => {
     const { data } = await supabase.from('sl_master_items').select('*').order('category').order('name')
@@ -37,9 +43,9 @@ export function MasterScreen({ onMasterItemsChange, userId }: Props) {
 
   useEffect(() => { loadItems() }, [loadItems])
 
-  const confirmDelete = async () => {
-    if (!pendingDeleteId) return
-    const id = pendingDeleteId
+  const confirmDelete = async (directId?: string) => {
+    const id = directId ?? pendingDeleteId
+    if (!id) return
     setPendingDeleteId(null)
     setItems(prev => prev.filter(i => i.id !== id))
     await supabase.from('sl_master_items').delete().eq('id', id)
@@ -51,6 +57,29 @@ export function MasterScreen({ onMasterItemsChange, userId }: Props) {
     acc[item.category].push(item)
     return acc
   }, {})
+
+  const startLongPress = (item: MasterItem) => {
+    longPressTriggered.current = false
+    if (longPressTimer.current) window.clearTimeout(longPressTimer.current)
+    longPressTimer.current = window.setTimeout(() => {
+      longPressTriggered.current = true
+      setQuickItem(item)
+    }, 450)
+  }
+
+  const endLongPress = () => {
+    if (longPressTimer.current) window.clearTimeout(longPressTimer.current)
+    longPressTimer.current = null
+  }
+
+  const updateQtyQuick = async (delta: number) => {
+    if (!quickItem) return
+    const nextQty = Math.max(1, quickItem.default_qty + delta)
+    const id = quickItem.id
+    setItems(prev => prev.map(i => i.id === id ? { ...i, default_qty: nextQty } : i))
+    setQuickItem({ ...quickItem, default_qty: nextQty })
+    await supabase.from('sl_master_items').update({ default_qty: nextQty }).eq('id', id)
+  }
 
   return (
     <div className="flex-1 flex flex-col overflow-hidden">
@@ -94,7 +123,18 @@ export function MasterScreen({ onMasterItemsChange, userId }: Props) {
             <div className="grid grid-cols-4 gap-2">
               {catItems.map(item => (
                 <button key={item.id}
-                  onClick={() => { setEditItem(item); setModalOpen(true) }}
+                  onMouseDown={() => startLongPress(item)}
+                  onMouseUp={endLongPress}
+                  onMouseLeave={endLongPress}
+                  onTouchStart={() => startLongPress(item)}
+                  onTouchEnd={endLongPress}
+                  onClick={() => {
+                    if (longPressTriggered.current) {
+                      longPressTriggered.current = false
+                      return
+                    }
+                    setEditItem(item); setModalOpen(true)
+                  }}
                   className="bg-white rounded-xl border border-rose-100 overflow-hidden text-left active:scale-95 transition-transform">
                   <div className="aspect-square flex items-center justify-center bg-rose-50 overflow-hidden">
                     {item.image_url ? (
@@ -124,12 +164,56 @@ export function MasterScreen({ onMasterItemsChange, userId }: Props) {
             <p className="font-bold text-rose-800">Delete this item?</p>
             <p className="text-sm text-rose-400">It will be removed from My Items.</p>
             <div className="flex gap-3">
-              <button onClick={() => setPendingDeleteId(null)}
+              <button onClick={() => { setPendingDeleteId(null); setSkipDeleteConfirmChecked(false) }}
                 className="flex-1 border border-rose-200 text-rose-400 rounded-2xl py-2.5 text-sm font-medium hover:bg-rose-50 transition-colors">
                 Cancel
               </button>
-              <button onClick={confirmDelete}
+              <button onClick={() => {
+                if (skipDeleteConfirmChecked) saveDeleteConfirmSetting(false)
+                setSkipDeleteConfirmChecked(false)
+                void confirmDelete()
+              }}
                 className="flex-1 bg-gradient-to-r from-rose-400 to-pink-500 text-white rounded-2xl py-2.5 text-sm font-semibold transition-colors">
+                Delete
+              </button>
+            </div>
+            <label className="flex items-center justify-center gap-2 text-xs text-rose-500">
+              <input type="checkbox" checked={skipDeleteConfirmChecked}
+                onChange={(e) => setSkipDeleteConfirmChecked(e.target.checked)}
+                className="w-4 h-4 accent-rose-500" />
+              次回から確認を表示しない
+            </label>
+          </div>
+        </div>
+      )}
+
+      {quickItem && (
+        <div className="fixed inset-0 z-[75] flex items-end">
+          <div className="absolute inset-0 bg-black/30" onClick={() => setQuickItem(null)} />
+          <div className="relative w-full max-w-[430px] mx-auto bg-white rounded-t-3xl p-5 pb-8 mb-16 space-y-4">
+            <p className="font-bold text-rose-800">{quickItem.name}</p>
+            <div>
+              <p className="text-xs text-rose-400 mb-2">Quantity</p>
+              <div className="flex items-center border border-rose-200 rounded-xl overflow-hidden">
+                <button onClick={() => updateQtyQuick(-1)}
+                  className="w-12 h-11 text-rose-500 text-xl">-</button>
+                <span className="flex-1 text-center font-bold text-rose-800">{quickItem.default_qty}</span>
+                <button onClick={() => updateQtyQuick(1)}
+                  className="w-12 h-11 text-rose-500 text-xl">+</button>
+              </div>
+            </div>
+            <div className="flex gap-3">
+              <button onClick={() => setQuickItem(null)}
+                className="flex-1 border border-rose-200 text-rose-500 rounded-2xl py-2.5 text-sm font-semibold">
+                Close
+              </button>
+              <button onClick={() => {
+                const id = quickItem.id
+                setQuickItem(null)
+                if (deleteConfirmEnabled) setPendingDeleteId(id)
+                else void confirmDelete(id)
+              }}
+                className="flex-1 bg-gradient-to-r from-rose-400 to-pink-500 text-white rounded-2xl py-2.5 text-sm font-semibold">
                 Delete
               </button>
             </div>
@@ -141,6 +225,7 @@ export function MasterScreen({ onMasterItemsChange, userId }: Props) {
         userId={userId} onAdded={loadItems} />
 
       <MasterItemModal item={editItem} isOpen={modalOpen} userId={userId}
+        deleteConfirmEnabled={deleteConfirmEnabled}
         onClose={() => setModalOpen(false)} onSave={loadItems}
         onDelete={async (id) => {
           setItems(prev => prev.filter(i => i.id !== id))
