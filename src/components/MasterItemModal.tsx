@@ -1,9 +1,10 @@
 'use client'
 import { useState, useEffect, useRef } from 'react'
-import { X, Camera, Minus, Plus } from 'lucide-react'
+import { X, Camera, Minus, Plus, Images } from 'lucide-react'
 import { supabase } from '@/lib/supabase/client'
 import { saveDeleteConfirmSetting } from '@/lib/userSettings'
 import { resolveDefaultFoodImage } from '@/lib/defaultFoodImage'
+import { DefaultImagePicker } from '@/components/DefaultImagePicker'
 import type { Category, MasterItem } from '@/types/database'
 
 const CATEGORIES: { value: Category; emoji: string; label: string }[] = [
@@ -36,6 +37,7 @@ export function MasterItemModal({ item, isOpen, onClose, onSave, onDelete, userI
   const [qty, setQty] = useState(1)
   const [imageUrl, setImageUrl] = useState<string | null>(null)
   const [uploading, setUploading] = useState(false)
+  const [pickerOpen, setPickerOpen] = useState(false)
   const [loading, setLoading] = useState(false)
   const [error, setError] = useState<string | null>(null)
   const [showDeleteConfirm, setShowDeleteConfirm] = useState(false)
@@ -164,9 +166,16 @@ export function MasterItemModal({ item, isOpen, onClose, onSave, onDelete, userI
             onChange={handleImageUpload}
             className="hidden"
           />
-          <p className="text-xs text-rose-400">
-            {imageUrl ? 'Tap to change photo' : 'Optional: add a photo'}
-          </p>
+          <div className="flex flex-col gap-1">
+            <p className="text-xs text-rose-400">
+              {imageUrl ? 'Tap to change photo' : 'Optional: add a photo'}
+            </p>
+            <button onClick={() => setPickerOpen(true)}
+              className="flex items-center gap-1 text-xs text-rose-500 font-semibold hover:text-rose-700 transition-colors">
+              <Images size={13} />
+              デフォルト画像から選ぶ
+            </button>
+          </div>
         </div>
 
         <div className="space-y-3">
@@ -278,6 +287,13 @@ export function MasterItemModal({ item, isOpen, onClose, onSave, onDelete, userI
           </div>
         )}
       </div>
+
+      <DefaultImagePicker
+        isOpen={pickerOpen}
+        currentUrl={imageUrl}
+        onSelect={url => setImageUrl(url)}
+        onClose={() => setPickerOpen(false)}
+      />
     </div>
   )
 }

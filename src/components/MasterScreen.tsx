@@ -5,6 +5,7 @@ import { supabase } from '@/lib/supabase/client'
 import { MasterItemModal } from '@/components/MasterItemModal'
 import { AiMasterScanModal } from '@/components/AiMasterScanModal'
 import { saveDeleteConfirmSetting } from '@/lib/userSettings'
+import { resolveDefaultFoodImage } from '@/lib/defaultFoodImage'
 import type { Category, MasterItem } from '@/types/database'
 
 const CATEGORY_EMOJI: Record<Category | string, string> = {
@@ -33,6 +34,9 @@ export function MasterScreen({ onMasterItemsChange, userId, deleteConfirmEnabled
   const [quickItem, setQuickItem] = useState<MasterItem | null>(null)
   const [pendingDeleteId, setPendingDeleteId] = useState<string | null>(null)
   const [skipDeleteConfirmChecked, setSkipDeleteConfirmChecked] = useState(false)
+  const [selectMode, setSelectMode] = useState(false)
+  const [selectedIds, setSelectedIds] = useState<Set<string>>(new Set())
+  const [showBulkConfirm, setShowBulkConfirm] = useState(false)
   const longPressTimer = useRef<number | null>(null)
   const longPressTriggered = useRef(false)
 
@@ -42,6 +46,21 @@ export function MasterScreen({ onMasterItemsChange, userId, deleteConfirmEnabled
   }, [onMasterItemsChange])
 
   useEffect(() => { loadItems() }, [loadItems])
+
+  // 画像がないアイテムをバックグラウンドで自動補完する
+  useEffect(() => {
+    if (items.length === 0) return
+    const missing = items.filter(i => !i.image_url)
+    if (missing.length === 0) return
+    void (async () => {
+      for (const item of missing) {
+        const url = await resolveDefaultFoodImage(item.name, item.category)
+        if (!url) continue
+        await supabase.from('sl_master_items').update({ image_url: url }).eq('id', item.id)
+        setItems(prev => prev.map(i => i.id === item.id ? { ...i, image_url: url } : i))
+      }
+    })()
+  }, [items.length]) // eslint-disable-line react-hooks/exhaustive-deps
 
   const confirmDelete = async (directId?: string) => {
     const id = directId ?? pendingDeleteId
@@ -81,25 +100,62 @@ export function MasterScreen({ onMasterItemsChange, userId, deleteConfirmEnabled
     await supabase.from('sl_master_items').update({ default_qty: nextQty }).eq('id', id)
   }
 
+  const exitSelectMode = () => {
+    setSelectMode(false)
+    setSelectedIds(new Set())
+    setShowBulkConfirm(false)
+  }
+
+  const toggleSelect = (id: string) => {
+    setSelectedIds(prev => {
+      const next = new Set(prev)
+      next.has(id) ? next.delete(id) : next.add(id)
+      return next
+    })
+  }
+
+  const bulkDelete = async () => {
+    const ids = [...selectedIds]
+    exitSelectMode()
+    setItems(prev => prev.filter(i => !ids.includes(i.id)))
+    await supabase.from('sl_master_items').delete().in('id', ids)
+    onMasterItemsChange(items.filter(i => !ids.includes(i.id)))
+  }
+
   return (
     <div className="flex-1 flex flex-col overflow-hidden">
       {/* Header */}
       <div className="px-4 pt-5 pb-3 flex items-center justify-between shrink-0">
         <h1 className="text-lg font-bold text-rose-800">📋 My Items</h1>
         <div className="flex items-center gap-2">
-          {/* AI スキャンボタン */}
-          <button onClick={() => setScanOpen(true)}
-            className="flex items-center gap-1.5 border border-rose-200 text-rose-400 text-sm font-semibold rounded-xl px-3 py-2 hover:border-rose-400 hover:text-rose-600 transition-all active:scale-95">
-            <Camera size={15} /> Scan
-          </button>
-          <button onClick={() => { setEditItem(undefined); setModalOpen(true) }}
-            className="flex items-center gap-1.5 bg-gradient-to-r from-rose-400 to-pink-500 text-white text-sm font-semibold rounded-xl px-4 py-2 transition-all shadow-md shadow-rose-200/50 active:scale-95">
-            <Plus size={16} /> Add
-          </button>
+          {selectMode ? (
+            <button onClick={exitSelectMode}
+              className="border border-rose-200 text-rose-400 text-sm font-semibold rounded-xl px-3 py-2 active:scale-95 transition-all">
+              キャンセル
+            </button>
+          ) : (
+            <>
+              <button onClick={() => setScanOpen(true)}
+                className="flex items-center gap-1.5 border border-rose-200 text-rose-400 text-sm font-semibold rounded-xl px-3 py-2 hover:border-rose-400 hover:text-rose-600 transition-all active:scale-95">
+                <Camera size={15} /> Scan
+              </button>
+              <button onClick={() => setSelectMode(true)}
+                className="border border-rose-200 text-rose-400 text-sm font-semibold rounded-xl px-3 py-2 hover:border-rose-400 hover:text-rose-600 transition-all active:scale-95">
+                選択
+              </button>
+              <button onClick={() => { setEditItem(undefined); setModalOpen(true) }}
+                className="flex items-center gap-1.5 bg-gradient-to-r from-rose-400 to-pink-500 text-white text-sm font-semibold rounded-xl px-4 py-2 transition-all shadow-md shadow-rose-200/50 active:scale-95">
+                <Plus size={16} /> Add
+              </button>
+            </>
+          )}
         </div>
       </div>
 
-      <div className="flex-1 overflow-y-auto px-4 pb-24 space-y-4">
+      {/* 選択モード時の薄暗いオーバーレイ */}
+      {selectMode && <div className="absolute inset-0 bg-black/20 z-10 pointer-events-none" />}
+
+      <div className="flex-1 overflow-y-auto px-4 pb-24 space-y-4 relative z-20">
         {/* Empty state — clickable to open Add modal */}
         {items.length === 0 && (
           <button onClick={() => { setEditItem(undefined); setModalOpen(true) }}
@@ -121,39 +177,64 @@ export function MasterScreen({ onMasterItemsChange, userId, deleteConfirmEnabled
             </div>
 
             <div className="grid grid-cols-4 gap-2">
-              {catItems.map(item => (
-                <button key={item.id}
-                  onMouseDown={() => startLongPress(item)}
-                  onMouseUp={endLongPress}
-                  onMouseLeave={endLongPress}
-                  onTouchStart={() => startLongPress(item)}
-                  onTouchEnd={endLongPress}
-                  onClick={() => {
-                    if (longPressTriggered.current) {
-                      longPressTriggered.current = false
-                      return
-                    }
-                    setEditItem(item); setModalOpen(true)
-                  }}
-                  className="bg-white rounded-xl border border-rose-100 overflow-hidden text-left active:scale-95 transition-transform">
-                  <div className="aspect-square flex items-center justify-center bg-rose-50 overflow-hidden">
-                    {item.image_url ? (
-                      // eslint-disable-next-line @next/next/no-img-element
-                      <img src={item.image_url} alt={item.name} className="w-full h-full object-cover" />
-                    ) : (
-                      <span className="text-3xl">{CATEGORY_EMOJI[item.category] ?? '📦'}</span>
+              {catItems.map(item => {
+                const isSelected = selectedIds.has(item.id)
+                return (
+                  <button key={item.id}
+                    onMouseDown={() => { if (!selectMode) startLongPress(item) }}
+                    onMouseUp={endLongPress}
+                    onMouseLeave={endLongPress}
+                    onTouchStart={() => { if (!selectMode) startLongPress(item) }}
+                    onTouchEnd={endLongPress}
+                    onClick={() => {
+                      if (selectMode) { toggleSelect(item.id); return }
+                      if (longPressTriggered.current) { longPressTriggered.current = false; return }
+                      setEditItem(item); setModalOpen(true)
+                    }}
+                    className={`rounded-xl border overflow-hidden text-left transition-all active:scale-95 relative
+                      ${selectMode && isSelected
+                        ? 'border-rose-400 ring-2 ring-rose-400 bg-white scale-95 shadow-lg shadow-rose-200/50'
+                        : selectMode
+                          ? 'border-rose-100 bg-white opacity-50'
+                          : 'border-rose-100 bg-white'
+                      }`}>
+                    <div className="aspect-square flex items-center justify-center bg-rose-50 overflow-hidden">
+                      {item.image_url ? (
+                        // eslint-disable-next-line @next/next/no-img-element
+                        <img src={item.image_url} alt={item.name} className="w-full h-full object-cover" />
+                      ) : (
+                        <span className="text-3xl">{CATEGORY_EMOJI[item.category] ?? '📦'}</span>
+                      )}
+                    </div>
+                    <div className="px-1.5 py-1 text-center">
+                      <p className="text-[10px] font-semibold text-rose-800 line-clamp-1">{item.name}</p>
+                      <p className="text-[9px] text-rose-400">¥{item.default_price.toLocaleString()}</p>
+                    </div>
+                    {/* 選択チェックマーク */}
+                    {selectMode && isSelected && (
+                      <div className="absolute top-1 right-1 w-5 h-5 rounded-full bg-gradient-to-br from-rose-400 to-pink-500 flex items-center justify-center shadow-sm">
+                        <span className="text-white text-[10px] font-black">✓</span>
+                      </div>
                     )}
-                  </div>
-                  <div className="px-1.5 py-1 text-center">
-                    <p className="text-[10px] font-semibold text-rose-800 line-clamp-1">{item.name}</p>
-                    <p className="text-[9px] text-rose-400">¥{item.default_price.toLocaleString()}</p>
-                  </div>
-                </button>
-              ))}
+                  </button>
+                )
+              })}
             </div>
           </div>
         ))}
       </div>
+
+      {/* 選択モード時の一括削除ボタン */}
+      {selectMode && (
+        <div className="absolute bottom-16 left-0 right-0 z-30 px-4 pb-3 pt-2 bg-white/90 backdrop-blur-sm border-t border-rose-100">
+          <button
+            onClick={() => { if (selectedIds.size > 0) setShowBulkConfirm(true) }}
+            disabled={selectedIds.size === 0}
+            className="w-full bg-gradient-to-r from-red-400 to-rose-500 disabled:from-rose-200 disabled:to-pink-200 text-white font-bold rounded-2xl py-3.5 transition-all shadow-lg shadow-rose-200/50 disabled:shadow-none">
+            {selectedIds.size === 0 ? 'アイテムを選択してください' : `${selectedIds.size}件を削除する`}
+          </button>
+        </div>
+      )}
 
       {/* Delete confirmation popup */}
       {pendingDeleteId && (
@@ -183,6 +264,28 @@ export function MasterScreen({ onMasterItemsChange, userId, deleteConfirmEnabled
                 className="w-4 h-4 accent-rose-500" />
               次回から確認を表示しない
             </label>
+          </div>
+        </div>
+      )}
+
+      {/* 一括削除確認ダイアログ */}
+      {showBulkConfirm && (
+        <div className="fixed inset-0 z-[90] flex items-center justify-center px-8">
+          <div className="absolute inset-0 bg-black/40" onClick={() => setShowBulkConfirm(false)} />
+          <div className="relative bg-white rounded-3xl p-6 w-full max-w-[300px] text-center space-y-3 shadow-xl">
+            <p className="text-2xl">🗑️</p>
+            <p className="font-bold text-rose-800">{selectedIds.size}件を削除しますか？</p>
+            <p className="text-sm text-red-400">選択したアイテムに紐づくリストのデータも全て消えます。</p>
+            <div className="flex gap-3 pt-1">
+              <button onClick={() => setShowBulkConfirm(false)}
+                className="flex-1 border border-rose-200 text-rose-400 rounded-2xl py-2.5 text-sm font-medium hover:bg-rose-50 transition-colors">
+                キャンセル
+              </button>
+              <button onClick={() => void bulkDelete()}
+                className="flex-1 bg-gradient-to-r from-red-400 to-rose-500 text-white rounded-2xl py-2.5 text-sm font-semibold">
+                削除する
+              </button>
+            </div>
           </div>
         </div>
       )}

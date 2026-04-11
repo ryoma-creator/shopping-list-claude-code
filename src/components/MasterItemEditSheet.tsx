@@ -1,8 +1,9 @@
 'use client'
 import { useState, useEffect } from 'react'
-import { X, Minus, Plus } from 'lucide-react'
+import { X, Minus, Plus, Images } from 'lucide-react'
 import { supabase } from '@/lib/supabase/client'
 import { loadDeleteConfirmSetting, saveDeleteConfirmSetting } from '@/lib/userSettings'
+import { DefaultImagePicker } from '@/components/DefaultImagePicker'
 import type { Category, MasterItem } from '@/types/database'
 
 const CATEGORIES: { value: Category; emoji: string; label: string }[] = [
@@ -32,6 +33,8 @@ export function MasterItemEditSheet({ item, onClose, onSaved, onDeleted }: Props
   const [editQty, setEditQty] = useState(1)
   const [showCatPicker, setShowCatPicker] = useState(false)
   const [showDeleteConfirm, setShowDeleteConfirm] = useState(false)
+  const [showImagePicker, setShowImagePicker] = useState(false)
+  const [editImageUrl, setEditImageUrl] = useState<string | null>(null)
   const [skipNextTime, setSkipNextTime] = useState(false)
   const [saving, setSaving] = useState(false)
 
@@ -41,8 +44,10 @@ export function MasterItemEditSheet({ item, onClose, onSaved, onDeleted }: Props
     setEditCategory(item.category)
     setEditPriceStr(item.default_price > 0 ? String(item.default_price) : '')
     setEditQty(Math.max(0, item.default_qty))
+    setEditImageUrl(item.image_url ?? null)
     setShowCatPicker(false)
     setShowDeleteConfirm(false)
+    setShowImagePicker(false)
     setSkipNextTime(false)
   }, [item])
 
@@ -58,6 +63,7 @@ export function MasterItemEditSheet({ item, onClose, onSaved, onDeleted }: Props
       category: editCategory,
       default_price: editPriceStr === '' ? 0 : Number(editPriceStr),
       default_qty: editQty,
+      image_url: editImageUrl,
     }).eq('id', item.id)
     setSaving(false)
     if (error) { alert(error.message); return }
@@ -93,11 +99,20 @@ export function MasterItemEditSheet({ item, onClose, onSaved, onDeleted }: Props
             </button>
           </div>
 
-          {/* アイテム名 */}
-          <div>
-            <label className="text-xs text-rose-400 mb-1 block">Item name</label>
-            <input type="text" value={editName} onChange={e => setEditName(e.target.value)}
-              className="w-full border border-rose-200 rounded-xl px-4 py-2.5 text-sm text-rose-900 focus:outline-none focus:ring-2 focus:ring-rose-300" />
+          {/* アイテム名 + 画像プレビュー */}
+          <div className="flex items-center gap-3">
+            <button onClick={() => setShowImagePicker(true)}
+              className="w-14 h-14 rounded-xl border-2 border-dashed border-rose-200 overflow-hidden flex-shrink-0 hover:border-rose-400 transition-colors active:scale-95">
+              {editImageUrl
+                // eslint-disable-next-line @next/next/no-img-element
+                ? <img src={editImageUrl} alt="item" className="w-full h-full object-cover" />
+                : <Images size={20} className="text-rose-300 m-auto" />}
+            </button>
+            <div className="flex-1">
+              <label className="text-xs text-rose-400 mb-1 block">Item name</label>
+              <input type="text" value={editName} onChange={e => setEditName(e.target.value)}
+                className="w-full border border-rose-200 rounded-xl px-4 py-2.5 text-sm text-rose-900 focus:outline-none focus:ring-2 focus:ring-rose-300" />
+            </div>
           </div>
 
           {/* カテゴリ — 選択中の1つだけ表示、タップで選択モーダルを開く */}
@@ -170,6 +185,13 @@ export function MasterItemEditSheet({ item, onClose, onSaved, onDeleted }: Props
           )}
         </div>
       </div>
+
+      <DefaultImagePicker
+        isOpen={showImagePicker}
+        currentUrl={editImageUrl}
+        onSelect={url => setEditImageUrl(url)}
+        onClose={() => setShowImagePicker(false)}
+      />
 
       {/* カテゴリ選択サブモーダル */}
       {showCatPicker && (
