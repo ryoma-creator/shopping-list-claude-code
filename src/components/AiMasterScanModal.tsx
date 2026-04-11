@@ -100,13 +100,19 @@ export function AiMasterScanModal({ isOpen, onClose, userId, onAdded }: Props) {
 
   const handleAdd = async () => {
     setAdding(true)
+    setError(null)
     const toAdd = items.filter((_, i) => selected.has(i))
     for (const item of toAdd) {
       const autoImage = await resolveDefaultFoodImage(item.name, item.category)
-      await supabase.from('sl_master_items').insert({
+      const { error: insertError } = await supabase.from('sl_master_items').insert({
         user_id: userId, name: item.name, category: item.category, image_url: autoImage,
         default_price: item.price ?? 0, default_qty: 1,
       })
+      if (insertError) {
+        setAdding(false)
+        setError(`追加失敗: ${insertError.message}`)
+        return
+      }
     }
     setAdding(false)
     onAdded()
@@ -192,6 +198,7 @@ export function AiMasterScanModal({ isOpen, onClose, userId, onAdded }: Props) {
           {/* 結果 */}
           {phase === 'results' && (
             <div className="space-y-3">
+              {error && <p className="text-sm text-red-500 text-center bg-red-50 rounded-xl px-3 py-2">{error}</p>}
               <p className="text-sm text-rose-500 font-medium">{items.length}件検出 — 名前と自動カテゴリで追加されます</p>
               {items.map((item, i) => (
                 <div key={i} className={`rounded-2xl border transition-all ${selected.has(i) ? 'border-rose-300 bg-rose-50' : 'border-rose-100 opacity-50'}`}>
