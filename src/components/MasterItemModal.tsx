@@ -80,7 +80,7 @@ export function MasterItemModal({ item, isOpen, onClose, onSave, onDelete, userI
         .upload(filePath, file, { cacheControl: '3600', upsert: false })
 
       if (uploadError) {
-        console.error('Upload error:', uploadError)
+        setError(`画像のアップロードに失敗しました: ${uploadError.message}`)
         return
       }
 

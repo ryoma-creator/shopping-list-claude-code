@@ -66,7 +66,7 @@ export function MasterItemEditSheet({ item, onClose, onSaved, onDeleted }: Props
       image_url: editImageUrl,
     }).eq('id', item.id)
     setSaving(false)
-    if (error) { alert(error.message); return }
+    if (error) { alert(`保存に失敗しました: ${error.message}`); return }
     onSaved()
     onClose()
   }

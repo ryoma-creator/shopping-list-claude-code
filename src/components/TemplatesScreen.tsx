@@ -87,7 +87,7 @@ export function TemplatesScreen({ onUseTemplate, userId }: Props) {
       }
 
       if (template.items.length > 0) {
-        await supabase.from('sl_list_items').insert(
+        const { error: insertErr } = await supabase.from('sl_list_items').insert(
           template.items.map((item, i) => ({
             list_id: listId,
             master_item_id: item.master_item_id,
@@ -98,6 +98,7 @@ export function TemplatesScreen({ onUseTemplate, userId }: Props) {
             sort_order: i,
           }))
         )
+        if (insertErr) { alert(`テンプレートの読み込みに失敗しました: ${insertErr.message}`); return }
       }
 
       onUseTemplate()
@@ -107,7 +108,8 @@ export function TemplatesScreen({ onUseTemplate, userId }: Props) {
   }
 
   const deleteTemplate = async (id: string) => {
-    await supabase.from('sl_shopping_lists').delete().eq('id', id)
+    const { error } = await supabase.from('sl_shopping_lists').delete().eq('id', id)
+    if (error) { alert(`削除に失敗しました: ${error.message}`); return }
     setTemplates((prev) => prev.filter((t) => t.id !== id))
   }
 

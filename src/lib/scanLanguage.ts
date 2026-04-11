@@ -14,12 +14,14 @@ function mapLocaleToScanLanguage(locale: string): ScanLanguage {
 
 export function getInitialScanLanguage(userId: string): ScanLanguage {
   if (typeof window === 'undefined') return 'en'
-  const saved = localStorage.getItem(`${KEY_PREFIX}${userId}`) as ScanLanguage | null
-  if (saved) return saved
+  try {
+    const saved = localStorage.getItem(`${KEY_PREFIX}${userId}`) as ScanLanguage | null
+    if (saved) return saved
+  } catch { /* ignore */ }
   return mapLocaleToScanLanguage(navigator.language || 'en')
 }
 
 export function saveScanLanguage(userId: string, language: ScanLanguage): void {
   if (typeof window === 'undefined') return
-  localStorage.setItem(`${KEY_PREFIX}${userId}`, language)
+  try { localStorage.setItem(`${KEY_PREFIX}${userId}`, language) } catch { /* ignore */ }
 }

@@ -97,7 +97,8 @@ export function MasterScreen({ onMasterItemsChange, userId, deleteConfirmEnabled
     const id = quickItem.id
     setItems(prev => prev.map(i => i.id === id ? { ...i, default_qty: nextQty } : i))
     setQuickItem({ ...quickItem, default_qty: nextQty })
-    await supabase.from('sl_master_items').update({ default_qty: nextQty }).eq('id', id)
+    const { error } = await supabase.from('sl_master_items').update({ default_qty: nextQty }).eq('id', id)
+    if (error) console.error('数量更新エラー:', error.message)
   }
 
   const exitSelectMode = () => {
@@ -118,7 +119,8 @@ export function MasterScreen({ onMasterItemsChange, userId, deleteConfirmEnabled
     const ids = [...selectedIds]
     exitSelectMode()
     setItems(prev => prev.filter(i => !ids.includes(i.id)))
-    await supabase.from('sl_master_items').delete().in('id', ids)
+    const { error } = await supabase.from('sl_master_items').delete().in('id', ids)
+    if (error) { alert(`削除に失敗しました: ${error.message}`); await loadItems(); return }
     onMasterItemsChange(items.filter(i => !ids.includes(i.id)))
   }
 

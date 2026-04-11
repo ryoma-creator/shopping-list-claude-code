@@ -130,7 +130,12 @@ export function AiScanModal({ isOpen, onClose, listId, masterItems, currentItemC
         offlineCache.saveTodayItems([...cached, localItem])
         offlineCache.addPendingOp({ id: tempId, type: 'insert_list_item', payload: row, createdAt: Date.now() })
       } else {
-        await supabase.from('sl_list_items').insert(row)
+        const { error: insertErr } = await supabase.from('sl_list_items').insert(row)
+        if (insertErr) {
+          setAdding(false)
+          setError(`追加失敗: ${insertErr.message}`)
+          return
+        }
       }
     }
     setAdding(false)
